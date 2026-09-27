@@ -2,28 +2,28 @@ import { Reveal } from "./Reveal";
 
 const FEATURES = [
   {
-    title: "Grounded answers",
-    body: "Upload a handbook, a PDF or a URL. Every answer is drawn from what you wrote, and scanned pages are discounted by how well they read.",
+    title: "Your company's brain",
+    body: "Upload a handbook, a PDF or a URL. Lantern builds a knowledge graph for your project alone, and every answer is drawn from what you wrote.",
   },
   {
-    title: "Guidance on the page",
-    body: "The widget reads the page the user is on and hands the agent opaque handles, never selectors. A plan naming a control that is not there is thrown away.",
+    title: "Routes it remembers",
+    body: "When a user finishes a walk, the route is kept. The next person who asks is shown the same way at once, with the exact number of steps.",
   },
   {
-    title: "Three checks, one verdict",
-    body: "Documentation, the live interface and the repository all have to come back empty before Lantern will say a feature does not exist.",
+    title: "A model you own",
+    body: "A guide model trains on how each walk ended, and plans the next one from what worked. The weights it learns are yours to keep.",
   },
   {
-    title: "Issues, not apologies",
-    body: "When the answer is no, Lantern drafts the request in the user's own words and files it on GitHub with the evidence attached.",
+    title: "Your team in the room",
+    body: "When a feature is missing, your people and the agent meet in one room and decide together what should be built.",
   },
   {
-    title: "A pull request, drafted",
-    body: "It reads the repository, picks the files to change and says why, writes the change, and opens a draft pull request that builds.",
+    title: "A factory for the gap",
+    body: "Once a person approves, parallel agents build the feature side by side. The best one becomes a draft pull request, and nothing merges on its own.",
   },
   {
-    title: "A human still decides",
-    body: "Nothing merges on its own. The run pauses on Approve, and the console shows the diff and the links before anyone clicks.",
+    title: "The loop, closed",
+    body: "Every request keeps track of the customers who asked for it. When the change ships, they get the news.",
   },
 ] as const;
 
@@ -36,9 +36,9 @@ export function Features() {
             Everything support <br />
             <span className="font-medium text-accent italic">should</span> be.
           </h2>
-          <p className="mt-6 max-w-xl text-lg text-ink/65">
-            One script tag on your app, a console on ours, and nothing in between for your team to
-            run.
+          <p className="mt-6 max-w-xl text-lg text-pretty text-ink/65">
+            What Lantern learns about your product serves your project and no other: the knowledge
+            it answers from, the routes it remembers and the model it trains.
           </p>
         </div>
 
@@ -47,7 +47,7 @@ export function Features() {
             <Reveal key={feature.title} delay={index * 80} className="h-full">
               <div className="h-full rounded-2xl border border-line/60 bg-surface/70 p-7">
                 <h3 className="mb-2 font-display text-[1.35rem] tracking-tight">{feature.title}</h3>
-                <p className="text-[14.5px] leading-relaxed text-ink/65">{feature.body}</p>
+                <p className="text-[14.5px] leading-relaxed text-pretty text-ink/65">{feature.body}</p>
               </div>
             </Reveal>
           ))}

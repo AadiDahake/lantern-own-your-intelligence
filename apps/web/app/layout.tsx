@@ -23,7 +23,7 @@ const newsreader = Newsreader({
 export const metadata: Metadata = {
   title: "Lantern",
   description:
-    "Support that answers from your documentation, shows users the real controls, and turns missing features into pull requests.",
+    "Support that learns, and what it learns is yours. It answers from your own knowledge, remembers every finished route and builds what is missing.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
