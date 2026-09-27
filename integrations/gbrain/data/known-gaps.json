@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "find-seats-together",
+    "title": "Find seats together for a party",
+    "description": "Let a family take three seats side by side in one move.",
+    "area": "seats",
+    "quote": "Can you find us three seats together?",
+    "rationale": "Today they rebook one passenger at a time.",
+    "status": "observed",
+    "fixture": "apps/web/test/turn.test.ts"
+  },
+  {
+    "slug": "add-a-lap-infant",
+    "title": "Add a lap infant to a booking",
+    "description": "Let a passenger add an infant under two to an existing booking.",
+    "area": "booking",
+    "quote": "Are lap infants free, and how do I add one to this booking?",
+    "rationale": "The help center sends the customer to the phone.",
+    "status": "observed",
+    "fixture": "apps/web/test/turn.test.ts"
+  },
+  {
+    "slug": "dark-theme",
+    "title": "Change to a dark theme",
+    "description": "Let a customer change the site to a dark theme.",
+    "area": "appearance",
+    "quote": "how do I change to a dark theme",
+    "rationale": "No help article answers this question in the answer key of the documentation check.",
+    "status": "observed",
+    "fixture": "scripts/eval-docs.ts"
+  },
+  {
+    "slug": "download-an-invoice",
+    "title": "Download an invoice",
+    "description": "Let a customer download the invoice of a booking.",
+    "area": "booking",
+    "quote": "where do I download my invoice",
+    "rationale": "No help article answers this question in the answer key of the documentation check.",
+    "status": "observed",
+    "fixture": "scripts/eval-docs.ts"
+  }
+]

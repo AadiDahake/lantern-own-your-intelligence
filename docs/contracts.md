@@ -732,6 +732,13 @@ group id. Two rows land on the conversation that triggered the run with `source:
      product does what was asked or the passage describes a manual workaround. Evidence is
      `[{documentTitle, url, heading, snippet, similarity}]`. Both lines are tuned on the offline
      set in `scripts/eval-docs.ts`.
+     When a company brain is configured (`GBRAIN_MCP_URL` and `GBRAIN_TOKEN`,
+     `integrations/gbrain/README.md`), `searchBrain` in `apps/web/lib/brain/provider.ts` is asked
+     first, for pages under `help/` only and with a limit of 1,500 ms. Its passages are scored by
+     the same rule on the cosine the brain reports, and a passage matched on meaning alone
+     (`weak_semantic`) is always read before it counts. The brain can only find the capability:
+     a brain that is off, late or empty, and a passage that does not cover the question, all
+     hand the question to the search above, so an absence never rests on the brain alone.
    - **interface**: pure local matching, no model call. Token overlap between the keywords plus the
      feature and each affordance's name, text, landmark and href, with simple stemming and a small
      synonym list (theme/dark/light/appearance, username/display name/name/profile/account). Score

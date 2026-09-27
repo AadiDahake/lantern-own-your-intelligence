@@ -18,6 +18,7 @@ import type { Affordance, PageContext, ProbeResult, SiteGraph } from "@lantern/s
 import { chatJson, embed } from "../openai";
 import { serviceClient } from "../supabase";
 import { activeGithubToken } from "../github/connection";
+import { searchBrain } from "../brain/provider";
 
 /** Words that mean the same thing to a user but not to a string comparison. */
 const SYNONYMS: Record<string, string[]> = {
@@ -110,6 +111,48 @@ ${passage}` },
   return result.covers === true;
 }
 
+/** How long the company brain may take before the present search answers instead. */
+const BRAIN_LIMIT_MS = 1_500;
+
+/**
+ * The documentation check against the company brain (GBrain), asked first when one is configured.
+ *
+ * The brain can only find the capability, never rule it out: a brain that is off, late or empty,
+ * and a passage that does not cover the question, all return null and the present search decides.
+ * Only help pages are read. A page about a known gap names the feature more plainly than any
+ * article, and read as documentation it would say the product has what it lacks.
+ */
+async function docsFromBrain(question: string, threshold: number, started: number): Promise<ProbeResult | null> {
+  const found = await searchBrain(question, { prefix: "help/", limit: 6, timeoutMs: BRAIN_LIMIT_MS }).catch(() => null);
+  if (!found || !found.configured || found.hits.length === 0) return null;
+  const ranked = found.hits
+    .map((hit) => ({ hit, score: docsScore(hit.cosine ?? 0, overlapOf(question, `${hit.title} ${hit.snippet}`)) }))
+    .sort((a, b) => b.score - a.score);
+  const top = ranked[0]!;
+  // A match on meaning alone is the brain's weakest evidence, so it is read and never trusted.
+  let hit = top.score >= threshold && top.hit.evidence !== "weak_semantic";
+  const sure = hit;
+  if (!hit && top.score >= DOCS_SURE_MISS) {
+    hit = await passageCovers(question, top.hit.title, top.hit.snippet).catch(() => false);
+  }
+  if (!hit) return null;
+  const evidence: DocsEvidence[] = ranked.slice(0, 3).map(({ hit: passage }) => ({
+    documentTitle: passage.title,
+    url: null,
+    heading: null,
+    snippet: passage.snippet.slice(0, 240),
+    similarity: Number((passage.cosine ?? 0).toFixed(3)),
+  }));
+  return {
+    probe: "docs",
+    hit: true,
+    score: top.score,
+    summary: `The company brain covers this: "${top.hit.title}" (${top.score.toFixed(2)}${sure ? "" : ", confirmed by reading it"}, ${top.hit.source.slug}).`,
+    evidence,
+    latencyMs: Date.now() - started,
+  };
+}
+
 /**
  * Documentation: cosine search over the ingested chunks, damped by OCR confidence.
  *
@@ -123,6 +166,8 @@ export async function probeDocs(
   threshold: number = DEFAULT_THRESHOLDS.docsThreshold,
 ): Promise<ProbeResult> {
   const started = Date.now();
+  const fromBrain = await docsFromBrain(question, threshold, started);
+  if (fromBrain) return fromBrain;
   try {
     const vector = embedding ? await embedding : (await embed([question]))[0];
     const { data, error } = await serviceClient().rpc("match_chunks_with_source", {
