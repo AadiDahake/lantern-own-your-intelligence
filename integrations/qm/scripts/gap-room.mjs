@@ -59,12 +59,22 @@ export function sign(secret, method, pathWithQuery, body, nowSec = Math.floor(Da
   return { "x-timestamp": String(nowSec), "x-signature": `v0=${signature}` };
 }
 
-function coreClient(base, secret) {
+/** The portal identity core requires on user-scoped routes: base64url claims, a dot, their HMAC. */
+export function portalIdentity(secret, principal, nowMs = Date.now()) {
+  const payload = Buffer.from(JSON.stringify({ p: principal, exp: nowMs + 60_000 })).toString("base64url");
+  return `${payload}.${createHmac("sha256", secret).update(payload).digest("base64url")}`;
+}
+
+function coreClient(base, secrets, principal) {
   return async function call(method, pathWithQuery, payload) {
     const body = payload === undefined ? "" : JSON.stringify(payload);
     const response = await fetch(`${base}${pathWithQuery}`, {
       method,
-      headers: { "content-type": "application/json", ...sign(secret, method, pathWithQuery, body) },
+      headers: {
+        "content-type": "application/json",
+        "x-portal-identity": portalIdentity(secrets.portal, principal),
+        ...sign(secrets.core, method, pathWithQuery, body),
+      },
       body: body || undefined,
     });
     const text = await response.text();
@@ -116,7 +126,8 @@ async function main() {
     process.stdout.write(`Turn Lantern would post:\n${JSON.stringify(gapTurn(principal, "<room>", gap), null, 2)}\n`);
     return;
   }
-  const call = coreClient(envValue("QM_CORE_URL") || "http://localhost:8080", envValue("CORE_SIGNING_SECRET"));
+  const secrets = { core: envValue("CORE_SIGNING_SECRET"), portal: envValue("PORTAL_IDENTITY_SECRET") };
+  const call = coreClient(envValue("QM_CORE_URL") || "http://localhost:8080", secrets, principal);
   const room = await ensureRoom(call, principal);
   process.stdout.write(`Room: "${room.name}" (QM project ${room.id})\n`);
   const turn = gapTurn(principal, room.id, gap);

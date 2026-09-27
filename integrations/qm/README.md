@@ -46,6 +46,7 @@ LANTERN_URL=http://localhost:3000 LANTERN_CONSOLE_TOKEN=... npm run gap-room
 | Variable | Where | Default |
 |---|---|---|
 | `CORE_SIGNING_SECRET` | `.env`, made by `qm init` | none; the bridge signs every core request with it |
+| `PORTAL_IDENTITY_SECRET` | `.env`, made by `qm init` | none; the bridge signs the room owner's identity with it |
 | `QM_CORE_URL` | environment or `.env` | `http://localhost:8080` |
 | `QM_PRINCIPAL` | environment or `.env` | `admin@lantern.local`; the owner of the room |
 | `LANTERN_URL` | environment | `http://host.docker.internal:3000` |
