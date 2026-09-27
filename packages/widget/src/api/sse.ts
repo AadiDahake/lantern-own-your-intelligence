@@ -192,7 +192,7 @@ export function coerceSteps(value: unknown): Step[] | null {
   return steps;
 }
 
-const PLAN_SOURCES: readonly string[] = ['graph', 'cached', 'page'];
+const PLAN_SOURCES: readonly string[] = ['graph', 'cached', 'page', 'memory'];
 
 function coercePlan(value: unknown): PlanSummary | null {
   if (!isRecord(value)) return null;

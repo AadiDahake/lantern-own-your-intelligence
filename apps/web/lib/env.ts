@@ -189,3 +189,24 @@ export function riverGuide(): { uv: string; script: string } | null {
     script: optional("RIVER_GUIDE_SCRIPT", "../../services/guide/choose.py"),
   };
 }
+
+/** Memorable API key (`mk_...`). Server-side only. Turns on route memory with extraction. */
+export const memorableApiKey = (): string | null => process.env.MEMORABLE_API_KEY || null;
+
+/** The Memorable extraction API base. */
+export const memorableApiUrl = (): string =>
+  optional("MEMORABLE_API_URL", "https://memorable-extraction-api.memorable.workers.dev");
+
+export type RouteMemoryMode = "memorable" | "local" | "off";
+
+/**
+ * Whether completed walks are remembered. `memorable` when a Memorable key is set; `local` keeps
+ * the same store with no extraction, for a machine that has not signed in yet; otherwise off.
+ */
+export function routeMemoryMode(): RouteMemoryMode {
+  if (process.env.MEMORABLE_API_KEY) return "memorable";
+  return process.env.LANTERN_ROUTE_MEMORY === "local" ? "local" : "off";
+}
+
+/** Where route memory keeps its files. Defaults to the OS temp dir. */
+export const routeMemoryDir = (): string | null => process.env.LANTERN_ROUTE_MEMORY_DIR || null;

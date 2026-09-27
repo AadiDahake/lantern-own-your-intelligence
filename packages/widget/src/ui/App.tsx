@@ -70,7 +70,7 @@ export function App({ client, shadow, host, position, register }: AppProps) {
   const conversationRef = useRef<string | undefined>(undefined);
   const machineRef = useRef<GuideMachine | null>(null);
   const spotlightRef = useRef<Spotlight | null>(null);
-  const guidedRef = useRef<{ turnId: string; question: string } | null>(null);
+  const guidedRef = useRef<{ turnId: string; question: string; turn: Turn } | null>(null);
   const counterRef = useRef(0);
   const messageScroll = useRef(-1);
   const callRef = useRef(call);
@@ -106,6 +106,18 @@ export function App({ client, shadow, host, position, register }: AppProps) {
       const spotlight = spotlightRef.current;
       if (!spotlight) return;
       if (snapshot.state === 'DONE' || snapshot.state === 'FAILED') {
+        const walked = guidedRef.current?.turn;
+        if (snapshot.state === 'DONE' && walked?.answer?.steps?.length) {
+          void client.outcome({
+            outcome: 'completed',
+            question: walked.question,
+            feature: walked.feature ?? null,
+            answer: walked.answer.text,
+            steps: walked.answer.steps,
+            conversationId: conversationRef.current ?? null,
+            messageId: walked.messageId ?? null,
+          });
+        }
         spotlight.hide();
         guidedRef.current = null;
         setGuidingTurnId(null);
@@ -133,7 +145,7 @@ export function App({ client, shadow, host, position, register }: AppProps) {
         setAnnouncement(`${note}Step ${snapshot.stepIndex + 1} of ${snapshot.total}. ${snapshot.step.caption}`);
       }
     },
-    [],
+    [client],
   );
 
   /**
@@ -198,7 +210,7 @@ export function App({ client, shadow, host, position, register }: AppProps) {
       const current = scanRef.current;
       if (!steps || steps.length === 0 || !current) return;
       ensureGuide();
-      guidedRef.current = { turnId: turn.id, question: turn.question };
+      guidedRef.current = { turnId: turn.id, question: turn.question, turn };
       setGuidingTurnId(turn.id);
       // The caption carries the instruction from here, and a panel covering the
       // control the user must click is worse than no panel at all.
