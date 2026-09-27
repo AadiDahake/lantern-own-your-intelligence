@@ -12,8 +12,8 @@ const AFTER = [
   "Answer on the page, from your own knowledge",
   "A finished route, ready for the next user",
   "Absence proved before anyone says no",
-  "The gap shaped together, built in parallel",
-  "The customers who asked get the news",
+  "The gap worked together, drafted as a pull request",
+  "The person who reported it sees its status",
 ];
 
 export function SplitStory() {
@@ -27,7 +27,7 @@ export function SplitStory() {
           </h2>
           <p className="mt-6 max-w-md text-lg leading-relaxed text-pretty text-ink/65">
             Support has always been a holding pattern. Lantern keeps what each user teaches it,
-            builds what nobody could find, and tells the people who asked.
+            drafts what nobody could find, and shows the person who asked where it stands.
           </p>
         </div>
 

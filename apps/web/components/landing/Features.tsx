@@ -3,27 +3,27 @@ import { Reveal } from "./Reveal";
 const FEATURES = [
   {
     title: "Your company's brain",
-    body: "Upload a handbook, a PDF or a URL. Lantern builds a knowledge graph for your project alone, and every answer is drawn from what you wrote.",
+    body: "Upload a handbook, a PDF or a URL. The documentation check asks your company's brain first, and searches what you uploaded when the brain has no answer.",
   },
   {
     title: "Routes it remembers",
-    body: "When a user finishes a walk, the route is kept. The next person who asks is shown the same way at once, with the exact number of steps.",
+    body: "When a user finishes a walk, the route is kept. The next person who asks the same question is shown the same way at once, with the exact number of steps.",
   },
   {
-    title: "A model you own",
-    body: "A guide model trains on how each walk ended, and plans the next one from what worked. The weights it learns are yours to keep.",
+    title: "A guide model, measured",
+    body: "A guide model is trained on the walks that reached their goal. On 108 decisions it never saw, it chose the right next control 76.8 percent of the time. The base model chose it 39.8 percent of the time.",
   },
   {
     title: "Your team in the room",
-    body: "When a feature is missing, your people and the agent meet in one room and decide together what should be built.",
+    body: "Each missing feature becomes a thread in a shared gap room. Your teammates and the room agent work the gap there, from the evidence Lantern collected.",
   },
   {
-    title: "A factory for the gap",
-    body: "Once a person approves, parallel agents build the feature side by side. The best one becomes a draft pull request, and nothing merges on its own.",
+    title: "A draft for the gap",
+    body: "Once your team accepts a request, an agent builds the change and opens a draft pull request. Nothing merges until a person approves it.",
   },
   {
     title: "The loop, closed",
-    body: "Every request keeps track of the customers who asked for it. When the change ships, they get the news.",
+    body: "Every gap counts the people who asked for it. The person who reported it follows its status in the widget.",
   },
 ] as const;
 
@@ -38,7 +38,7 @@ export function Features() {
           </h2>
           <p className="mt-6 max-w-xl text-lg text-pretty text-ink/65">
             What Lantern learns about your product serves your project and no other: the knowledge
-            it answers from, the routes it remembers and the model it trains.
+            it answers from and the routes it remembers.
           </p>
         </div>
 

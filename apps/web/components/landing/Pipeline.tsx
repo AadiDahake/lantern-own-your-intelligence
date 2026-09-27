@@ -5,7 +5,7 @@ const STAGES = [
   { label: "Checks in parallel", tone: "neutral" },
   { label: "Verdict", tone: "accent" },
   { label: "Team room", tone: "neutral" },
-  { label: "Factory and draft PR", tone: "neutral" },
+  { label: "Build and draft PR", tone: "neutral" },
   { label: "Your approval", tone: "soft" },
 ] as const;
 

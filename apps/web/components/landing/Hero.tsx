@@ -11,7 +11,8 @@ export function Hero() {
 
         <p className="mt-8 max-w-xl text-[17px] leading-relaxed text-pretty text-ink/65">
           Lantern answers from your own documentation, points at the real control on the page the
-          user is already looking at, and opens the pull request when the feature does not exist.
+          user is already looking at, and drafts the pull request for a missing feature once your team
+          accepts it.
           Every walk a user finishes teaches it, so the next person who asks is shown the way at
           once.
         </p>

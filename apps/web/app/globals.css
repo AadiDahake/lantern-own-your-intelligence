@@ -962,7 +962,7 @@ body::before {
  * needs a longer duration to keep the same pace (about 38px a second).
  */
 @utility animate-marquee {
-  animation: pl-marquee 44s linear infinite;
+  animation: pl-marquee 37s linear infinite;
 }
 
 /* --- Landing pipeline ---------------------------------------------------------------- */

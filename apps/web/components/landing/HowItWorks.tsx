@@ -14,12 +14,12 @@ const STEPS = [
   },
   {
     title: "Each finished walk teaches it.",
-    body: "Lantern points at the real control, one step at a time. When the user gets there, the route is kept for the next person, and the guide model learns from how it went.",
+    body: "Lantern points at the real control, one step at a time. When the user gets there, the route is kept for the next person who asks the same question.",
     icon: <IconRoute />,
   },
   {
     title: "The gap becomes a pull request.",
-    body: "Your team and the agent shape what is missing in one room. Parallel agents build it and open a draft pull request, and nothing merges until a person approves.",
+    body: "Your teammates and the room agent work the gap in a shared room. When your team accepts the request, an agent builds it and opens a draft pull request, and nothing merges until a person approves.",
     icon: <IconBranch />,
   },
 ] as const;
