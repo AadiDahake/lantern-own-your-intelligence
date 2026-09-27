@@ -1,0 +1,99 @@
+{
+  "run_id": "20260927T230045Z",
+  "base_model": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "lora_rank": 16,
+  "lr": 0.0002,
+  "batch": 32,
+  "epochs": 1,
+  "loss_fn": "cross_entropy",
+  "reward": "0.7 * (completion - 1) / 4 + 0.3 * (coherence - 1) / 4, kept when total >= 4",
+  "sessions": 83,
+  "kept": 65,
+  "train_sessions": 50,
+  "heldout_sessions": 15,
+  "train_decisions": 329,
+  "heldout_decisions": 108,
+  "steps": [
+    {
+      "step": 1,
+      "examples": 32,
+      "loss": 0.6472056514673316,
+      "seconds": 35.44,
+      "grad_norm": 979.8674057302345
+    },
+    {
+      "step": 2,
+      "examples": 32,
+      "loss": 0.08394039547438392,
+      "seconds": 17.22,
+      "grad_norm": 24.733215728660593
+    },
+    {
+      "step": 3,
+      "examples": 32,
+      "loss": 0.06857095174542202,
+      "seconds": 34.74,
+      "grad_norm": 14.174246617276918
+    },
+    {
+      "step": 4,
+      "examples": 32,
+      "loss": 0.1461380437094591,
+      "seconds": 16.14,
+      "grad_norm": 110.31804604274193
+    },
+    {
+      "step": 5,
+      "examples": 32,
+      "loss": 0.04138488095896073,
+      "seconds": 38.22,
+      "grad_norm": 15.217662837097613
+    },
+    {
+      "step": 6,
+      "examples": 32,
+      "loss": 0.04128708190044716,
+      "seconds": 29.34,
+      "grad_norm": 55.71611056002237
+    },
+    {
+      "step": 7,
+      "examples": 32,
+      "loss": 0.048347670181946,
+      "seconds": 16.43,
+      "grad_norm": 16.29293932046944
+    },
+    {
+      "step": 8,
+      "examples": 32,
+      "loss": 0.04686086119996094,
+      "seconds": 16.5,
+      "grad_norm": 13.836810343702496
+    },
+    {
+      "step": 9,
+      "examples": 32,
+      "loss": 0.008532475304716854,
+      "seconds": 15.89,
+      "grad_norm": 6.44042900823296
+    },
+    {
+      "step": 10,
+      "examples": 32,
+      "loss": 0.025462578772020447,
+      "seconds": 15.98,
+      "grad_norm": 6.465909074774846
+    },
+    {
+      "step": 11,
+      "examples": 9,
+      "loss": 0.003245861284316532,
+      "seconds": 27.21,
+      "grad_norm": 0.8178869430297141
+    }
+  ],
+  "checkpoint": {
+    "training": "river://23675eab-6995-4b31-97ca-df337e0f75c6/weights/lantern-guide-20260927T230045Z-train",
+    "inference": "river://23675eab-6995-4b31-97ca-df337e0f75c6/sampler_weights/lantern-guide-20260927T230045Z-inf"
+  }
+}

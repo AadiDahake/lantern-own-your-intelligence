@@ -195,7 +195,9 @@ describe('between steps', () => {
   });
 
   it('does not bind the next step on the old page under a new address', async () => {
-    const h = harness(undefined, 60);
+    // The bind limit must outlast the ticks below on a loaded runner: when it fires, recovery
+    // takes over and this test no longer exercises the arrival check it is about.
+    const h = harness(undefined, 2000);
     const scan = scanAffordances({ question: 'change my seat' });
     // The next step is a twin of a control the home page also has: the nav "My Booking".
     const plan = novaairPlan(scan);

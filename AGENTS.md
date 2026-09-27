@@ -12,6 +12,7 @@ before changing anything that crosses a boundary.
 | `packages/widget` | The embeddable script. Builds to a single IIFE at `dist/lantern.js`, copied into `apps/web/public/widget.js`. |
 | `apps/web` | The Next.js dashboard: landing page, console, and every HTTP route. |
 | `services/worker` | The Python escalation worker. Independent toolchain (`uv`), independent tests. |
+| `services/guide` | The guide model: a River LoRA that picks the next control, with its training, evaluation and runs. `uv` scripts; see its README. |
 | `supabase/migrations` | Schema. Additive migrations only after the first release. |
 | `scripts` | Node maintenance scripts run through the root `package.json`. |
 | `docs` | Architecture, contracts, guidance, the capability compiler, opportunities, the forge engine, deploy notes. |
