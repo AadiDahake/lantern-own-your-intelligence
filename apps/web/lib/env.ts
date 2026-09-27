@@ -177,3 +177,15 @@ export const targetProductionUrl = (): string | null => process.env.TARGET_PRODU
 
 /** Optional Slack webhook, posted to when an issue and a pull request are drafted. */
 export const slackWebhookUrl = (): string | null => process.env.SLACK_WEBHOOK_URL || null;
+
+/**
+ * The trained guide model on River, or null when `RIVER_API_KEY` is not set. River serves a
+ * checkpoint over gRPC only, so the web app runs `services/guide/choose.py` with `uv`.
+ */
+export function riverGuide(): { uv: string; script: string } | null {
+  if (!process.env.RIVER_API_KEY) return null;
+  return {
+    uv: optional("UV_BIN", "uv"),
+    script: optional("RIVER_GUIDE_SCRIPT", "../../services/guide/choose.py"),
+  };
+}
