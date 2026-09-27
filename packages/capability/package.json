@@ -1,0 +1,26 @@
+{
+  "name": "@lantern/capability",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The capability compiler: user trajectories in, a validated Capability IR out. No network, no database, no framework imports.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./fake-model": "./test/fake-model.ts"
+  },
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "fixtures": "node scripts/make-fixtures.mjs"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
