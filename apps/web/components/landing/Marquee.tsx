@@ -3,8 +3,6 @@ const ITEMS = [
   "GBrain",
   "River AI",
   "Memorable",
-  "Superset",
-  "UFO",
   "OpenAI",
   "Codex",
   "GitHub",
