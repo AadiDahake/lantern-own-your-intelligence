@@ -1,0 +1,41 @@
+{
+  "name": "lantern",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @lantern/web",
+    "build": "npm run build --workspace @lantern/widget && npm run build --workspace @lantern/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "compile": "tsx scripts/compile.ts",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:seed": "node scripts/seed.mjs",
+    "demo:reset": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/reset-demo.mjs",
+    "forge:local": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/forge-local.ts",
+    "forge:runner": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/forge-runner.ts",
+    "forge:sweep": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/forge-sweep.ts",
+    "discover:runner": "tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/discover-runner.ts",
+    "tail": "node scripts/lantern-tail.mjs",
+    "seed:site": "tsx --tsconfig apps/web/tsconfig.json scripts/seed-site.ts",
+    "e2e:guide": "playwright test",
+    "ask:live": "node scripts/ask-live.mjs",
+    "eval:docs": "tsx --tsconfig apps/web/tsconfig.json scripts/eval-docs.ts",
+    "explore": "tsx --tsconfig apps/web/tsconfig.json scripts/explore.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1",
+    "pg": "^8.13.1",
+    "tsx": "^4.23.12",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
