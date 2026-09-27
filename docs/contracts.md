@@ -448,7 +448,7 @@ export type SiteTransition = { from: string; key: string; to: string; kind: "nav
 export type SiteGraph = { pages: SitePage[]; controls: SiteControl[]; transitions: SiteTransition[] };
 
 // How a step plan was made, and how many steps it has, fixed for the whole walk.
-export type PlanSource = "graph" | "cached" | "page";
+export type PlanSource = "graph" | "cached" | "page" | "memory";
 export type PlanSummary = { source: PlanSource; total: number; destination?: { route: string; title: string } };
 export type AnswerSource = { title: string; url: string | null };
 
@@ -608,6 +608,7 @@ with `Authorization: Bearer <token>` resolves to the project whose slug is
 | Route | Body / query | Returns |
 |---|---|---|
 | `POST /api/chat` | `{key, conversationId?, visitorId?, question, page: PageContext, continueFrom?}` | SSE of `ChatEvent`; each `data:` line is one JSON event, `event:` is its type. With `continueFrom`, one `answer` event with the remaining steps from the current page and `routeChanged` |
+| `POST /api/guide/outcome` | `{key, outcome: "completed", question, feature, answer, steps: Step[], conversationId, messageId}` | `{ok: true, remembered, steps?, walks?, memorable?, reason?}`; the widget sends it when a walk reaches its last step. A completed walk whose every step carries `control` is remembered by `apps/web/lib/routes/provider.ts`: extracted by Memorable's `POST /v1/extract` when `MEMORABLE_API_KEY` is set, and kept in Lantern's own store. Any other outcome changes nothing |
 | `POST /api/site/observe` | `{key, page: PageContext, transition?: {fromUrl, fromTitle, control: {role, name, landmark?, href?}}}` | `{ok: true}`; records the page in the site graph and the move the user made to reach it |
 | `POST /api/site/explore` | - (console) | 202 `{job: ExploreJob}`; queues an exploration of `project.site_url` (or returns the one already queued or running), 400 without a site address. A browser cannot run in the function, so a process on a machine that has one carries the job: the forge runner or `npm run explore -- --drain` |
 | `GET /api/site/explore` | - (console) | `{job: ExploreJob \| null}`: the newest job, `{id, siteUrl, status: queued \| running \| done \| failed, summary, error, createdAt, startedAt, finishedAt}`; the console polls it |
@@ -717,7 +718,14 @@ group id. Two rows land on the conversation that triggered the run with `source:
    A `chat` or `page` turn stores its assistant message with `probes: []` and `verdict: null`,
    writes the conversation's outcome and one-sentence summary itself (`solved` when it answered,
    `unresolved` when the page did not), and still keeps whatever the visitor said about themselves.
-4. **A known route** (`product` and `mixed` only): a hit plans the route from the current page
+4. **A remembered route** comes first when route memory is on (`MEMORABLE_API_KEY`, or
+   `LANTERN_ROUTE_MEMORY=local`): a question with the intent key of a walk a person completed is
+   planned from the current page to the control that walk ended on, over the graph, and answered
+   with `plan.source: "memory"`, before the message is read and with no model call. The `decision`
+   row is titled "Remembered route: N steps, confirmed by M walks". A miss, or a target the graph
+   cannot reach from this page, falls through to the known route.
+
+   **A known route** (`product` and `mixed` only): a hit plans the route from the current page
    over the graph, emits `answer` with `plan.source: "cached"` and returns, with no search and no
    further model call. No model output reaches the user: the answer, the route and the count are
    all read off the graph, and the reading of step 3, started beside the lookups for the sake of
@@ -1027,4 +1035,7 @@ default by the keys present) selects where candidates build; `REFLEX_API_KEY`,
 `RUNLOOP_API_KEY` and the optional `RUNLOOP_BLUEPRINT` for Runloop devboxes (also the agent's
 devbox under Reflex); `FORGE_TARGET_REPO` (default `AadiDahake/novaair-own-your-intelligence`) when the project has no
 repository bound; `FORGE_LOCAL_CACHE_DIR` for the local strategy's clone; `OPENAI_API_KEY` for
-Codex inside a devbox, optional locally where the saved Codex login is used.
+Codex inside a devbox, optional locally where the saved Codex login is used. Route memory's:
+`MEMORABLE_API_KEY` turns it on with extraction, `MEMORABLE_API_URL` is the extraction API base,
+`LANTERN_ROUTE_MEMORY=local` turns it on with no Memorable key, and `LANTERN_ROUTE_MEMORY_DIR` is
+where the store keeps one JSON file per project (default the OS temp dir).

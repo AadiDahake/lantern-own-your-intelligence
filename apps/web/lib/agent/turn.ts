@@ -40,6 +40,7 @@ import {
 } from "../graph/store";
 import { mapWithCurrentPage } from "../graph/live";
 import { belongsToSite } from "../graph/origin";
+import { recallRoute, rememberedAsKnown } from "../routes/provider";
 import { currentPageOf } from "./bind";
 import { answerChat, answerFromPage, answerFromPassage } from "./direct";
 import { loadVisitorFacts, rememberFromTurn } from "./memory";
@@ -329,6 +330,8 @@ async function* knownRouteTurn(input: {
   memory: string[];
   announce: boolean;
   turnStarted: number;
+  /** `memory` when the route was remembered from a walk a person completed (`lib/routes`). */
+  origin?: "known" | "memory";
 }): AsyncGenerator<ChatEvent, boolean> {
   const { projectId, conversationId, page, graph, cached, turnStarted } = input;
   const route = routeFromHere(graph, page, cached.target);
@@ -337,7 +340,8 @@ async function* knownRouteTurn(input: {
   if (input.announce) {
     yield { type: "understanding", feature: cached.feature, intent: "product", memory: input.memory };
   }
-  const plan: PlanSummary = { source: "cached", total: route.steps.length, destination: route.destination };
+  const remembered = input.origin === "memory";
+  const plan: PlanSummary = { source: remembered ? "memory" : "cached", total: route.steps.length, destination: route.destination };
   const verdict: Verdict = {
     outcome: "answer",
     confidence: 0.9,
@@ -357,9 +361,11 @@ async function* knownRouteTurn(input: {
     projectId,
     conversationId,
     kind: "decision",
-    title: `Known route: ${route.steps.length} step${route.steps.length === 1 ? "" : "s"} from the product map`,
+    title: remembered
+      ? `Remembered route: ${route.steps.length} step${route.steps.length === 1 ? "" : "s"}, confirmed by ${cached.hitCount} walk${cached.hitCount === 1 ? "" : "s"}`
+      : `Known route: ${route.steps.length} step${route.steps.length === 1 ? "" : "s"} from the product map`,
     detail: {
-      source: "cached",
+      source: plan.source,
       intent: cached.intent,
       feature: cached.feature,
       target: cached.target,
@@ -380,7 +386,7 @@ async function* knownRouteTurn(input: {
     sources: cached.sources,
   };
   yield { type: "conversation", conversationId, messageId: persisted.messageId || input.messageId };
-  void touchKnownRoute(cached.id, cached.hitCount).catch(() => undefined);
+  if (!remembered) void touchKnownRoute(cached.id, cached.hitCount).catch(() => undefined);
   // The console's outcome, without a model: the walk was shown, and that is the summary.
   await serviceClient()
     .from("conversation")
@@ -455,11 +461,29 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
     });
   }
 
-  const [, memory, known] = await Promise.all([
+  const [, memory, known, recalled] = await Promise.all([
     ownSite ? recordScan(projectId, page, "widget").catch(() => undefined) : Promise.resolve(undefined),
     loadVisitorFacts(projectId, input.visitorId),
     findKnownRoute(projectId, intent).catch(() => null),
+    recallRoute(projectId, question).catch(() => null),
   ]);
+
+  // A route a person walked to the end outranks one that was only answered: it is served first.
+  if (recalled) {
+    const served = yield* knownRouteTurn({
+      projectId,
+      conversationId,
+      messageId,
+      page,
+      graph: mapWithCurrentPage(await graphPromise, page),
+      cached: rememberedAsKnown(recalled),
+      memory,
+      announce: true,
+      turnStarted,
+      origin: "memory",
+    });
+    if (served) return;
+  }
 
   // 3. An exact intent-key hit is this question asked again: the same concepts, in a question
   // that already resolved to a control on this site. It is served from the product map before

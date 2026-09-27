@@ -153,8 +153,11 @@ export type EscalationOffer =
   | { offered: true; request: FeatureRequest }
   | { offered: false; reason?: "no_repository" };
 
-/** How a step plan was made: read off the site graph, replayed from a known route, or planned over the current page alone. */
-export type PlanSource = "graph" | "cached" | "page";
+/**
+ * How a step plan was made: read off the site graph, replayed from a known route, planned over the
+ * current page alone, or replayed from a route a person walked to the end (`lib/routes`).
+ */
+export type PlanSource = "graph" | "cached" | "page" | "memory";
 
 export type PlanSummary = {
   source: PlanSource;

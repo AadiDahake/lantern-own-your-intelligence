@@ -8,7 +8,19 @@ import type {
   FeedbackRequest,
   PageContext,
   ReportBlock,
+  Step,
 } from '../types';
+
+/** How a walk ended, with the steps it was planned with. */
+export type WalkOutcome = {
+  outcome: 'completed';
+  question: string;
+  feature: string | null;
+  answer: string;
+  steps: Step[];
+  conversationId: string | null;
+  messageId: string | null;
+};
 
 /** A move the user made on their own: the control they pressed and the page it came from. */
 export type ObservedTransition = {
@@ -134,6 +146,23 @@ export class ApiClient {
       });
     } catch {
       // Nothing to do: the graph simply does not learn from this page.
+    }
+  }
+
+  /**
+   * Tells the server a walk reached its last step, so the next person who asks the same question
+   * is answered from it. Fire-and-forget, like `observe`.
+   */
+  async outcome(input: WalkOutcome): Promise<void> {
+    try {
+      await fetch(this.url('/api/guide/outcome'), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ key: this.config.key, ...input }),
+        keepalive: true,
+      });
+    } catch {
+      // Nothing to do: the route is simply not remembered.
     }
   }
 
