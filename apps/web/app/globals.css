@@ -957,8 +957,12 @@ body::before {
   }
 }
 
+/*
+ * The duration sets the speed: the row moves half its width per cycle, so a longer stack list
+ * needs a longer duration to keep the same pace (about 38px a second).
+ */
 @utility animate-marquee {
-  animation: pl-marquee 30s linear infinite;
+  animation: pl-marquee 44s linear infinite;
 }
 
 /* --- Landing pipeline ---------------------------------------------------------------- */

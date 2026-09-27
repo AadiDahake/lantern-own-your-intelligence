@@ -1,4 +1,17 @@
-const ITEMS = ["OpenAI", "Codex", "PostHog", "Runloop", "GitHub", "Supabase", "Vercel", "Next.js"];
+const ITEMS = [
+  "QM",
+  "GBrain",
+  "River AI",
+  "Memorable",
+  "Superset",
+  "UFO",
+  "OpenAI",
+  "Codex",
+  "GitHub",
+  "Supabase",
+  "Vercel",
+  "Next.js",
+];
 
 /**
  * The stack strip under the hero. Purely typographic, scrolling slowly behind a soft mask.
