@@ -1,0 +1,2205 @@
+{
+  "run_id": "20260927T230045Z",
+  "base_model": "Qwen/Qwen3.6-35B-A3B-FP8",
+  "checkpoint": "river://23675eab-6995-4b31-97ca-df337e0f75c6/sampler_weights/lantern-guide-20260927T230045Z-inf",
+  "unseen_tasks": {
+    "what": "held-out sessions: no decision of these walks is in the training data",
+    "sessions": 15,
+    "decisions": 108
+  },
+  "settings": {
+    "temperature": 0,
+    "max_tokens": 64,
+    "chat_template_kwargs": {
+      "enable_thinking": false
+    }
+  },
+  "base": {
+    "decisions": 108,
+    "accuracy": 0.3981,
+    "invalid_rate": 0.0185,
+    "accuracy_by_kind": {
+      "confirm": 0.7333,
+      "passenger": 0.5854,
+      "seat": 0.1538
+    },
+    "mean_seconds": 2.573
+  },
+  "trained": {
+    "decisions": 108,
+    "accuracy": 0.7685,
+    "invalid_rate": 0.0,
+    "accuracy_by_kind": {
+      "confirm": 1.0,
+      "passenger": 1.0,
+      "seat": 0.5192
+    },
+    "mean_seconds": 3.124
+  },
+  "rows": {
+    "base": [
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a3",
+        "chosen": "a6",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 3.32
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a17",
+        "chosen": "a6",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 3.291
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 3.204
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 3.97
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 4.118
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 3.168
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "confirm",
+        "target": "a9",
+        "chosen": "a9",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a9\"}",
+        "seconds": 3.601
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "passenger",
+        "target": "a2",
+        "chosen": "a8",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 3.938
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "seat",
+        "target": "a15",
+        "chosen": "a8",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 2.536
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "seat",
+        "target": "a3",
+        "chosen": "a8",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a8\"\n}",
+        "seconds": 2.221
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "passenger",
+        "target": "a8",
+        "chosen": "a8",
+        "correct": true,
+        "answer": "{\n\"action\": \"press\",\n\"id\": \"a8\"\n}",
+        "seconds": 2.675
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "seat",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.979
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "confirm",
+        "target": "a20",
+        "chosen": "a20",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 3.177
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "passenger",
+        "target": "a6",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.639
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "seat",
+        "target": "a8",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.646
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "passenger",
+        "target": "a22",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 1.908
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 1.842
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "passenger",
+        "target": "a3",
+        "chosen": "a3",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.215
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.229
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "confirm",
+        "target": "a7",
+        "chosen": null,
+        "correct": false,
+        "answer": "{\"action\": \"done\"}",
+        "seconds": 2.41
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "passenger",
+        "target": "a18",
+        "chosen": "a18",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 3.102
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "seat",
+        "target": "a10",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.781
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "passenger",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 2.762
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "seat",
+        "target": "a23",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.926
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.794
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "seat",
+        "target": "a9",
+        "chosen": "a18",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 2.975
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "confirm",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.994
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.74
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "seat",
+        "target": "a19",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.677
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "passenger",
+        "target": "a23",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.669
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "seat",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.218
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.716
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "seat",
+        "target": "a2",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.505
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "confirm",
+        "target": "a11",
+        "chosen": "a11",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a11\"}",
+        "seconds": 2.012
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a18",
+        "chosen": "a1",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.695
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a6",
+        "chosen": "a1",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.677
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 1.613
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a8",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.357
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a5",
+        "chosen": "a5",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.356
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a14",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.146
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "confirm",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a16\"\n}",
+        "seconds": 2.646
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "passenger",
+        "target": "a4",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.127
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.616
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a2",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.48
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a12",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 1.959
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a5",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.608
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "passenger",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.613
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a6",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.093
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "confirm",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a17\"\n}",
+        "seconds": 2.546
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "passenger",
+        "target": "a3",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.742
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a32",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.112
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a18",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.379
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a31",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a13\"\n}",
+        "seconds": 2.187
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a13\"\n}",
+        "seconds": 3.087
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a13\"\n}",
+        "seconds": 2.543
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 2.006
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "confirm",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.654
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a22",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.417
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a7",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.656
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a14",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.646
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 3.158
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a24",
+        "chosen": "a23",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a23\"}",
+        "seconds": 2.166
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a23",
+        "chosen": "a23",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a23\"}",
+        "seconds": 2.139
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.818
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "confirm",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 2.791
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a19",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a19\"}",
+        "seconds": 2.687
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a11",
+        "chosen": "a19",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a19\"}",
+        "seconds": 2.242
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a19",
+        "chosen": "a19",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a19\"}",
+        "seconds": 2.645
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a14",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.244
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.022
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a8",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.023
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "confirm",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 2.754
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a25",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.148
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a15",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 1.95
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.755
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a9",
+        "chosen": "a7",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a7\"}",
+        "seconds": 2.2
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a7",
+        "chosen": "a7",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a7\"}",
+        "seconds": 2.297
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a18",
+        "chosen": "a18",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 2.731
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "confirm",
+        "target": "a22",
+        "chosen": null,
+        "correct": false,
+        "answer": "{\"action\": \"done\"}",
+        "seconds": 2.454
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a14",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.283
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "seat",
+        "target": "a11",
+        "chosen": "a14",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.277
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "passenger",
+        "target": "a14",
+        "chosen": "a14",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.184
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "seat",
+        "target": "a6",
+        "chosen": "a16",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a16\"\n}",
+        "seconds": 2.7
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "passenger",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 2.533
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "seat",
+        "target": "a2",
+        "chosen": "a16",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a16\"\n}",
+        "seconds": 2.327
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "confirm",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 2.737
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "passenger",
+        "target": "a12",
+        "chosen": "a20",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.307
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "seat",
+        "target": "a9",
+        "chosen": "a8",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 2.548
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "passenger",
+        "target": "a8",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a5\"\n}",
+        "seconds": 2.34
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a5\"\n}",
+        "seconds": 2.289
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "passenger",
+        "target": "a5",
+        "chosen": "a5",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.299
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a16\"\n}",
+        "seconds": 2.199
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "confirm",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a6\"\n}",
+        "seconds": 2.855
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "passenger",
+        "target": "a16",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 3.098
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a24",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.612
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a27",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.528
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a12",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\n\"action\": \"press\",\n\"id\": \"a17\"\n}",
+        "seconds": 2.578
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.578
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a7",
+        "correct": false,
+        "answer": "{\n\"action\": \"press\",\n\"id\": \"a7\"\n}",
+        "seconds": 2.737
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "passenger",
+        "target": "a7",
+        "chosen": "a7",
+        "correct": true,
+        "answer": "{\n\"action\": \"press\",\n\"id\": \"a7\"\n}",
+        "seconds": 2.633
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a3",
+        "chosen": "a1",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a1\"\n}",
+        "seconds": 2.776
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "confirm",
+        "target": "a14",
+        "chosen": "a16",
+        "correct": false,
+        "answer": "{\n\"action\": \"press\",\n\"id\": \"a16\"\n}",
+        "seconds": 2.445
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "passenger",
+        "target": "a12",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.505
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "seat",
+        "target": "a13",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.794
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "seat",
+        "target": "a17",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a5\"\n}",
+        "seconds": 2.224
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "passenger",
+        "target": "a5",
+        "chosen": "a5",
+        "correct": true,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a5\"\n}",
+        "seconds": 2.234
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "seat",
+        "target": "a15",
+        "chosen": "a12",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a12\"}",
+        "seconds": 2.445
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "confirm",
+        "target": "a11",
+        "chosen": "a12",
+        "correct": false,
+        "answer": "{\n  \"action\": \"press\",\n  \"id\": \"a12\"\n}",
+        "seconds": 2.641
+      }
+    ],
+    "trained": [
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a3",
+        "chosen": "a3",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 5.401
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a17",
+        "chosen": "a3",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 5.587
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 5.399
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 5.387
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 4.983
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 5.744
+      },
+      {
+        "session_id": "019923a8-69c5-79fa-8cf1-52a1e1bf0700",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "confirm",
+        "target": "a9",
+        "chosen": "a9",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a9\"}",
+        "seconds": 5.265
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "passenger",
+        "target": "a2",
+        "chosen": "a2",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a2\"}",
+        "seconds": 5.388
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "seat",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 2.463
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "seat",
+        "target": "a3",
+        "chosen": "a8",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 3.432
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "passenger",
+        "target": "a8",
+        "chosen": "a8",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 2.706
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "seat",
+        "target": "a1",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.445
+      },
+      {
+        "session_id": "019983e1-0125-7a64-88c2-f11f5bb70111",
+        "goal": "I want my family of 2 to sit together on flight NA412.",
+        "kind": "confirm",
+        "target": "a20",
+        "chosen": "a20",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.797
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "passenger",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 2.695
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "seat",
+        "target": "a8",
+        "chosen": "a2",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a2\"}",
+        "seconds": 3.485
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "passenger",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 3.524
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 2.642
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "passenger",
+        "target": "a3",
+        "chosen": "a3",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.49
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a20",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.496
+      },
+      {
+        "session_id": "01990da3-2552-799d-81cf-82f7d784cf98",
+        "goal": "Move the 3 people on my booking to seats together on NA214.",
+        "kind": "confirm",
+        "target": "a7",
+        "chosen": "a7",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a7\"}",
+        "seconds": 2.491
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "passenger",
+        "target": "a18",
+        "chosen": "a18",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 2.616
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "seat",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.757
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "passenger",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 2.472
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "seat",
+        "target": "a23",
+        "chosen": "a23",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a23\"}",
+        "seconds": 2.574
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.577
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "seat",
+        "target": "a9",
+        "chosen": "a9",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a9\"}",
+        "seconds": 2.503
+      },
+      {
+        "session_id": "01990103-8889-734c-8bc9-7958e88733cd",
+        "goal": "Move the 3 people on my booking to seats together on NA507.",
+        "kind": "confirm",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 3.491
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.674
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "seat",
+        "target": "a19",
+        "chosen": "a19",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a19\"}",
+        "seconds": 2.739
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "passenger",
+        "target": "a23",
+        "chosen": "a23",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a23\"}",
+        "seconds": 4.412
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "seat",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.753
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.736
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "seat",
+        "target": "a2",
+        "chosen": "a2",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a2\"}",
+        "seconds": 3.746
+      },
+      {
+        "session_id": "01999a22-4de6-76a5-8637-74e1acc0aa87",
+        "goal": "Move the 3 people on my booking to seats together on NA412.",
+        "kind": "confirm",
+        "target": "a11",
+        "chosen": "a11",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a11\"}",
+        "seconds": 3.535
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a18",
+        "chosen": "a18",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 3.138
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a6",
+        "chosen": "a18",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 2.809
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a1",
+        "chosen": "a1",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a1\"}",
+        "seconds": 2.588
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a8",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 3.992
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a5",
+        "chosen": "a5",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 3.594
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a14",
+        "chosen": "a14",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.173
+      },
+      {
+        "session_id": "0199030a-3dd2-7456-8d32-41b9ec034583",
+        "goal": "We are 3 travellers on NA507. Put us in seats side by side.",
+        "kind": "confirm",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 2.937
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "passenger",
+        "target": "a4",
+        "chosen": "a4",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a4\"}",
+        "seconds": 2.748
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a12",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a12\"}",
+        "seconds": 2.71
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a2",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.881
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a12",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.557
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a5",
+        "chosen": "a10",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.298
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "passenger",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.422
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "seat",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 2.946
+      },
+      {
+        "session_id": "0199656f-32ff-7380-8ecb-2a740f31a6bb",
+        "goal": "How do I get all 2 of us next to each other on NA412?",
+        "kind": "confirm",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.554
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "passenger",
+        "target": "a3",
+        "chosen": "a3",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 3.478
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a32",
+        "chosen": "a20",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.53
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a18",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.725
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a31",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 3.482
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.839
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.494
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "seat",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 2.573
+      },
+      {
+        "session_id": "019981e1-fd1b-7edd-89f8-9ef3ddda71ba",
+        "goal": "I want my family of 2 to sit together on flight NA507.",
+        "kind": "confirm",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.613
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 2.525
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a7",
+        "chosen": "a14",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.523
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a14",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.475
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.469
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a24",
+        "chosen": "a24",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a24\"}",
+        "seconds": 4.628
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a23",
+        "chosen": "a23",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a23\"}",
+        "seconds": 5.245
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 4.389
+      },
+      {
+        "session_id": "01996074-382b-7224-8d0e-0fed7bc965d0",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "confirm",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 4.347
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 3.431
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a11",
+        "chosen": "a11",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a11\"}",
+        "seconds": 3.551
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a19",
+        "chosen": "a19",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a19\"}",
+        "seconds": 3.554
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a14",
+        "chosen": "a14",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 3.541
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.549
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "seat",
+        "target": "a8",
+        "chosen": "a8",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 3.366
+      },
+      {
+        "session_id": "01991eb6-4166-7e99-817c-6a40d6d8cc85",
+        "goal": "Move the 3 people on my booking to seats together on NA318.",
+        "kind": "confirm",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 3.263
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a25",
+        "chosen": "a25",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a25\"}",
+        "seconds": 3.355
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a15",
+        "chosen": "a20",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.853
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a10",
+        "chosen": "a10",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a10\"}",
+        "seconds": 2.655
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a9",
+        "chosen": "a11",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a11\"}",
+        "seconds": 3.439
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "passenger",
+        "target": "a7",
+        "chosen": "a7",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a7\"}",
+        "seconds": 3.505
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "seat",
+        "target": "a18",
+        "chosen": "a18",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a18\"}",
+        "seconds": 2.416
+      },
+      {
+        "session_id": "0199178c-3e64-7def-8235-9dbf99e53ed7",
+        "goal": "We are 3 travellers on NA318. Put us in seats side by side.",
+        "kind": "confirm",
+        "target": "a22",
+        "chosen": "a22",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a22\"}",
+        "seconds": 3.392
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "passenger",
+        "target": "a13",
+        "chosen": "a13",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 2.473
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "seat",
+        "target": "a11",
+        "chosen": "a13",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a13\"}",
+        "seconds": 3.43
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "passenger",
+        "target": "a14",
+        "chosen": "a14",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.538
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "seat",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 3.718
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "passenger",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 3.486
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "seat",
+        "target": "a2",
+        "chosen": "a2",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a2\"}",
+        "seconds": 2.509
+      },
+      {
+        "session_id": "0199d012-b472-7fb5-8784-b37dee7d9c7e",
+        "goal": "How do I get all 3 of us next to each other on NA507?",
+        "kind": "confirm",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 3.553
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "passenger",
+        "target": "a12",
+        "chosen": "a12",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a12\"}",
+        "seconds": 2.482
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "seat",
+        "target": "a9",
+        "chosen": "a2",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a2\"}",
+        "seconds": 2.566
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "passenger",
+        "target": "a8",
+        "chosen": "a8",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a8\"}",
+        "seconds": 2.674
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a20",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.631
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "passenger",
+        "target": "a5",
+        "chosen": "a5",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.779
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "seat",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 2.678
+      },
+      {
+        "session_id": "01999761-1c89-7a00-8683-416a486b790b",
+        "goal": "Seat my party of 3 together on flight NA214.",
+        "kind": "confirm",
+        "target": "a6",
+        "chosen": "a6",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a6\"}",
+        "seconds": 2.568
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "passenger",
+        "target": "a16",
+        "chosen": "a16",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a16\"}",
+        "seconds": 2.419
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a24",
+        "chosen": "a26",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a26\"}",
+        "seconds": 2.642
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a27",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.48
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a12",
+        "chosen": "a17",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 2.461
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "passenger",
+        "target": "a17",
+        "chosen": "a17",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a17\"}",
+        "seconds": 3.513
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a20",
+        "chosen": "a20",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a20\"}",
+        "seconds": 2.453
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "passenger",
+        "target": "a7",
+        "chosen": "a7",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a7\"}",
+        "seconds": 3.238
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "seat",
+        "target": "a3",
+        "chosen": "a3",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a3\"}",
+        "seconds": 2.535
+      },
+      {
+        "session_id": "0199e3f8-327c-7cb2-8b8f-d73848c6e649",
+        "goal": "Seat my party of 3 together on flight NA412.",
+        "kind": "confirm",
+        "target": "a14",
+        "chosen": "a14",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a14\"}",
+        "seconds": 2.536
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "passenger",
+        "target": "a12",
+        "chosen": "a12",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a12\"}",
+        "seconds": 3.667
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "seat",
+        "target": "a13",
+        "chosen": "a12",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a12\"}",
+        "seconds": 2.574
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "seat",
+        "target": "a17",
+        "chosen": "a5",
+        "correct": false,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.575
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "passenger",
+        "target": "a5",
+        "chosen": "a5",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a5\"}",
+        "seconds": 2.503
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "seat",
+        "target": "a15",
+        "chosen": "a15",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a15\"}",
+        "seconds": 2.303
+      },
+      {
+        "session_id": "01990b8e-9c0c-7c01-8b33-49aab18b1823",
+        "goal": "How do I get all 2 of us next to each other on NA318?",
+        "kind": "confirm",
+        "target": "a11",
+        "chosen": "a11",
+        "correct": true,
+        "answer": "{\"action\": \"press\", \"id\": \"a11\"}",
+        "seconds": 2.482
+      }
+    ]
+  }
+}
