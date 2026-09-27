@@ -1,0 +1,11 @@
+{
+  "id": "lantern",
+  "label": "Lantern",
+  "advertise": "lantern gaps [--limit N]: list the product gaps Lantern collected from end users, heaviest first, with report counts, priority, status and the linked issue or pull request",
+  "hints": [
+    "Run `lantern gaps` before you discuss a gap, so every number you quote comes from Lantern.",
+    "The tool reads LANTERN_URL (default http://host.docker.internal:3000) and LANTERN_CONSOLE_TOKEN."
+  ],
+  "egress": ["host.docker.internal"],
+  "install": { "binary": "lantern" }
+}
