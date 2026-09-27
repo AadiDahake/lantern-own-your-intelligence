@@ -1,0 +1,24 @@
+{
+  "columns": [
+    "eligible",
+    "used",
+    "succeeded",
+    "median_actions_after",
+    "support_before",
+    "support_after",
+    "seeded_events",
+    "total_events"
+  ],
+  "results": [
+    [
+      1428,
+      917,
+      884,
+      2,
+      251,
+      148,
+      3628,
+      3628
+    ]
+  ]
+}

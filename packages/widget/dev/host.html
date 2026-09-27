@@ -1,0 +1,473 @@
+<!doctype html>
+<!--
+  The widget's development host: a NovaAir "Manage Trip" page in the airline's own style, so the
+  widget is always seen inside a product that is not Lantern.
+
+  Query parameter:
+    ?host=dark      the airline's night palette, to check the panel on a dark page
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Manage Trip - NovaAir</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --canvas: linear-gradient(135deg, #dbe9ff 0%, #e4e7fb 48%, #ece9fb 100%);
+    --shell: #ffffff;
+    --card: #ffffff;
+    --tint: #eaf1ff;
+    --navy: #0b0b2b;
+    --navy-soft: #3d3f63;
+    --ink-muted: #6b6e85;
+    --line: #e8e9f2;
+    --blue: #0a66ff;
+    --orange: #ff8a1f;
+    --seat-taken: #e8e9f2;
+    --seat-taken-ink: #9a9db8;
+    --pill-dark-bg: #0b0b2b;
+    --pill-dark-ink: #ffffff;
+    --shell-shadow: 0 24px 60px -30px rgba(11, 11, 43, 0.28);
+    --card-shadow: 0 18px 50px -38px rgba(11, 11, 43, 0.6);
+    --bar-shadow: 0 8px 28px -22px rgba(11, 11, 43, 0.5);
+  }
+  html[data-host="dark"] {
+    --canvas: linear-gradient(135deg, #0b0b2b 0%, #12123a 48%, #191744 100%);
+    --shell: #12122f;
+    --card: #1a1a40;
+    --tint: #20204c;
+    --navy: #f2f3ff;
+    --navy-soft: #c9cbe6;
+    --ink-muted: #a6a9c8;
+    --line: rgba(255, 255, 255, 0.12);
+    --seat-taken: #2c2c58;
+    --seat-taken-ink: #8a8db0;
+    --pill-dark-bg: #ffffff;
+    --pill-dark-ink: #0b0b2b;
+    --shell-shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.7);
+    --card-shadow: 0 18px 50px -38px rgba(0, 0, 0, 0.8);
+    --bar-shadow: 0 8px 28px -22px rgba(0, 0, 0, 0.8);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    min-height: 100vh;
+    padding: 40px;
+    background: var(--canvas);
+    color: var(--navy);
+    font: 400 15px/1.55 Poppins, "Poppins Fallback", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .app-shell {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 32px 40px 36px;
+    border-radius: 32px;
+    background: var(--shell);
+    box-shadow: var(--shell-shadow);
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  /* Top bar */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 32px;
+    padding: 12px 16px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--card);
+    box-shadow: var(--bar-shadow);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+  .brand svg { width: 30px; height: 30px; }
+  .topbar nav { display: flex; align-items: center; gap: 32px; }
+  .topbar nav a { font-size: 0.95rem; font-weight: 500; color: var(--ink-muted); transition: color 120ms ease; }
+  .topbar nav a:hover, .topbar nav a[aria-current="page"] { color: var(--navy); }
+  .topbar nav a[aria-current="page"] { font-weight: 700; }
+  .topbar .actions { display: flex; align-items: center; gap: 12px; }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    border: 1.5px solid transparent;
+    padding: 10px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+  }
+  .pill svg { width: 16px; height: 16px; }
+  .pill-primary { background: var(--blue); color: #fff; box-shadow: 0 10px 24px -12px rgba(10, 102, 255, 0.75); }
+  .pill-primary:hover { transform: translateY(-1px); }
+  .pill-outline { background: var(--card); color: var(--navy); border-color: var(--line); }
+  .pill-outline:hover { border-color: var(--ink-muted); }
+  .pill-dark { background: var(--pill-dark-bg); color: var(--pill-dark-ink); }
+  .pill-sm { padding: 8px 16px; font-size: 0.85rem; }
+  .pill:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+  /* Page */
+  .eyebrow { margin: 0; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--blue); }
+  h1 { margin: 10px 0 0; font-size: 3rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+  .lede { margin: 12px 0 0; font-size: 1.05rem; color: var(--ink-muted); }
+  .stack { display: grid; gap: 24px; margin-top: 32px; }
+  .grid-2 { display: grid; gap: 24px; grid-template-columns: 1fr 1fr; }
+  .card {
+    padding: 28px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: var(--card-shadow);
+  }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  .card h2 { margin: 0; font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+  .card p { margin: 0; color: var(--ink-muted); }
+
+  /* Flight summary */
+  .flight { display: grid; grid-template-columns: 1fr auto 1fr; gap: 24px; align-items: center; padding: 22px 26px; border-radius: 20px; background: var(--tint); }
+  .flight .code { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  .flight .city { margin-top: 6px; font-size: 0.9rem; color: var(--ink-muted); }
+  .flight .time { margin-top: 10px; font-weight: 600; }
+  .flight .mid { text-align: center; color: var(--ink-muted); font-size: 0.85rem; }
+  .flight .mid .line { position: relative; width: 140px; height: 2px; margin: 8px auto; background: var(--line); }
+  .flight .mid .line::after { content: ""; position: absolute; top: -5px; right: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--blue); }
+  .flight .to { text-align: right; }
+  .facts { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 18px; }
+  .facts div { font-size: 0.9rem; color: var(--ink-muted); }
+  .facts strong { display: block; color: var(--navy); font-size: 1rem; }
+  .trip-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+
+  /* Seats */
+  .passengers { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .passengers li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; }
+  .passengers .who { font-weight: 600; }
+  .passengers .who small { display: block; font-weight: 400; font-size: 0.85rem; color: var(--ink-muted); }
+  .passengers .seat { font-size: 1.15rem; font-weight: 800; color: var(--blue); }
+  .seat-note { margin-top: 14px; font-size: 0.9rem; color: var(--ink-muted); }
+
+  /* Seat map */
+  .seat-map { margin-top: 22px; padding: 24px; border-radius: 20px; background: var(--tint); }
+  .seat-map-layout { display: grid; grid-template-columns: auto 1fr; gap: 28px; align-items: start; }
+  .cabin { display: grid; gap: 8px; justify-content: start; }
+  .cabin-row { display: grid; grid-template-columns: 28px repeat(3, 36px) 22px repeat(3, 36px); gap: 6px; align-items: center; }
+  .cabin-row .row-num { font-size: 0.8rem; font-weight: 600; color: var(--ink-muted); text-align: right; padding-right: 4px; }
+  .cabin-head .col { font-size: 0.75rem; font-weight: 600; color: var(--ink-muted); text-align: center; }
+  .seat {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 10px;
+    border: 2px solid var(--orange);
+    background: var(--card);
+    color: var(--navy);
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: transform 100ms ease;
+  }
+  .seat:hover:not(:disabled) { transform: translateY(-1px); }
+  .seat[data-state="booked"] { border-color: var(--seat-taken); background: var(--seat-taken); color: var(--seat-taken-ink); cursor: not-allowed; }
+  .seat[data-state="selected"] { border-color: var(--blue); background: var(--blue); color: #fff; }
+  .seat:focus-visible { outline: 3px solid rgba(10, 102, 255, 0.4); outline-offset: 2px; }
+  .picker h3 { margin: 0 0 10px; font-size: 1rem; font-weight: 700; }
+  .picker .hint { margin: 0 0 12px; font-size: 0.9rem; color: var(--ink-muted); }
+  .picker-list { display: grid; gap: 8px; }
+  .picker-list button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid var(--line);
+    border-radius: 14px;
+    background: var(--card);
+    text-align: left;
+    font-weight: 600;
+  }
+  .picker-list button[aria-pressed="true"] { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(10, 102, 255, 0.16); }
+  .picker-list button span:last-child { color: var(--blue); font-weight: 800; }
+  .legend { display: flex; flex-wrap: wrap; gap: 18px; margin: 16px 0 0; padding: 0; list-style: none; font-size: 0.85rem; color: var(--ink-muted); }
+  .legend li { display: flex; align-items: center; gap: 8px; }
+  .legend i { width: 16px; height: 16px; border-radius: 5px; border: 2px solid var(--orange); background: var(--card); }
+  .legend i.booked { border-color: var(--seat-taken); background: var(--seat-taken); }
+  .legend i.selected { border-color: var(--blue); background: var(--blue); }
+  .map-actions { display: flex; gap: 12px; margin-top: 20px; }
+
+  .help-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .help-list a { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border: 1px solid var(--line); border-radius: 14px; font-weight: 600; }
+  .help-list a:hover { border-color: var(--ink-muted); }
+
+  footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--line); color: var(--ink-muted); font-size: 0.85rem; }
+  footer nav { display: flex; gap: 22px; }
+  footer nav a:hover { color: var(--navy); }
+
+  @media (max-width: 1100px) {
+    body { padding: 20px; }
+    .app-shell { padding: 20px; }
+    .topbar nav { display: none; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .seat-map-layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="NovaAir home">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <g stroke="#0a66ff" stroke-width="3" stroke-linecap="round">
+          <path d="M16 3v26M3 16h26M6.8 6.8l18.4 18.4M25.2 6.8 6.8 25.2" />
+        </g>
+        <circle cx="16" cy="16" r="4" fill="#0a66ff" />
+      </svg>
+      <span>NovaAir</span>
+    </a>
+    <nav aria-label="Main">
+      <a href="/">Flights</a>
+      <a href="/">Hotels</a>
+      <a href="/">Schedule</a>
+      <a href="/">Testimonials</a>
+    </nav>
+    <div class="actions">
+      <a class="pill pill-outline pill-sm" href="tel:18005550142">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h3l1.5 4-2 1.3a12 12 0 0 0 5.2 5.2l1.3-2 4 1.5v3a2 2 0 0 1-2.2 2A16.5 16.5 0 0 1 4.5 5.7 2 2 0 0 1 6.5 3.5Z" /></svg>
+        Call Us
+      </a>
+      <a class="pill pill-dark pill-sm" href="/" aria-current="page">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4Z" /><path d="M14 6v12" stroke-dasharray="2 3" /></svg>
+        My Booking
+      </a>
+    </div>
+  </header>
+
+  <main id="main">
+    <p class="eyebrow">My Booking</p>
+    <h1>Manage Trip</h1>
+    <p class="lede">Confirmation <strong>NV4K2Q</strong> for Priya Shah and two children.</p>
+
+    <div class="stack">
+      <section class="card" aria-labelledby="flight-heading">
+        <div class="card-head">
+          <h2 id="flight-heading">Your flight</h2>
+          <span class="pill pill-outline pill-sm">Confirmed</span>
+        </div>
+        <div class="flight">
+          <div>
+            <div class="code">SFO</div>
+            <div class="city">San Francisco</div>
+            <div class="time">08:40</div>
+          </div>
+          <div class="mid">
+            NovaAir 214
+            <div class="line"></div>
+            5h 25m, nonstop
+          </div>
+          <div class="to">
+            <div class="code">JFK</div>
+            <div class="city">New York</div>
+            <div class="time">17:05</div>
+          </div>
+        </div>
+        <div class="facts">
+          <div>Date <strong>Sat 19 Sep 2026</strong></div>
+          <div>Fare <strong>Economy Flex</strong></div>
+          <div>Passengers <strong>3</strong></div>
+          <div>Bags <strong>1 checked</strong></div>
+        </div>
+        <div class="trip-actions">
+          <a class="pill pill-outline" href="/">Check in</a>
+          <a class="pill pill-outline" href="/">Change flight</a>
+        </div>
+      </section>
+
+      <section class="card" aria-labelledby="seats-heading">
+        <div class="card-head">
+          <h2 id="seats-heading">Seats</h2>
+          <button type="button" class="pill pill-primary" id="change-seats">Change seats</button>
+        </div>
+        <ul class="passengers" id="passenger-list"></ul>
+        <p class="seat-note">NovaAir changes seats one passenger at a time. Seat changes close 60 minutes before departure.</p>
+        <div id="seat-map-slot"></div>
+      </section>
+
+      <div class="grid-2">
+        <section class="card" aria-labelledby="extras-heading">
+          <div class="card-head"><h2 id="extras-heading">Extras</h2></div>
+          <ul class="help-list">
+            <li><a href="/">Add a checked bag <span aria-hidden="true">&rarr;</span></a></li>
+            <li><a href="/">Choose meals <span aria-hidden="true">&rarr;</span></a></li>
+            <li><a href="/">Add travel insurance <span aria-hidden="true">&rarr;</span></a></li>
+          </ul>
+        </section>
+        <section class="card" aria-labelledby="help-heading">
+          <div class="card-head"><h2 id="help-heading">Need help?</h2></div>
+          <p>Call NovaAir on 1-800-555-0142, every day from 05:00 to 23:00 Pacific Time.</p>
+          <ul class="help-list" style="margin-top: 16px">
+            <li><a href="/">Help center <span aria-hidden="true">&rarr;</span></a></li>
+            <li><a href="/">Changes and refunds <span aria-hidden="true">&rarr;</span></a></li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <span>NovaAir is a fictional airline. Every flight, price and reservation on this site is invented for a product demonstration.</span>
+    <nav aria-label="Footer">
+      <a href="/">Check-in</a>
+      <a href="/">Baggage allowance</a>
+      <a href="/">Help center</a>
+    </nav>
+  </footer>
+</div>
+
+<script>
+  // --- Host page controls: ?host=dark for the night palette. ------------------------------
+  const params = new URLSearchParams(location.search);
+  if (params.get('host') === 'dark') document.documentElement.dataset.host = 'dark';
+
+  // --- The reservation. Three passengers, seated apart, as the demo has them. --------------
+  const passengers = [
+    { id: 'p1', name: 'Priya Shah', note: 'Adult', seat: '12A' },
+    { id: 'p2', name: 'Arjun Shah', note: 'Child, 9', seat: '18C' },
+    { id: 'p3', name: 'Meera Shah', note: 'Child, 6', seat: '24F' },
+  ];
+  // Rows 1 to 17 are full. The map shows the rows still open on this flight.
+  const ROWS = [18, 19, 20, 21, 22, 23, 24];
+  const COLUMNS = ['A', 'B', 'C', 'D', 'E', 'F'];
+  const BOOKED = new Set([
+    '18A', '18B', '18E', '19A', '19B', '19C', '19D', '19F', '20A', '20C', '20D', '20E', '20F',
+    '21D', '21F', '22A', '22B', '22C', '22F', '23B', '23C', '23D', '23E', '24A', '24B', '24C', '24D',
+  ]);
+
+  const list = document.getElementById('passenger-list');
+  const slot = document.getElementById('seat-map-slot');
+  const changeButton = document.getElementById('change-seats');
+  let picked = passengers[0].id;
+
+  function renderPassengers() {
+    list.innerHTML = '';
+    for (const person of passengers) {
+      const item = document.createElement('li');
+      item.innerHTML =
+        '<span class="who">' + person.name + '<small>' + person.note + '</small></span>' +
+        '<span class="seat">' + person.seat + '</span>';
+      list.appendChild(item);
+    }
+  }
+
+  function seatState(code) {
+    if (passengers.some((person) => person.seat === code)) return 'selected';
+    return BOOKED.has(code) ? 'booked' : 'available';
+  }
+
+  function renderSeatMap() {
+    // Built fresh on every open, the way the real seat map mounts, so the widget has to cope
+    // with the controls being different nodes than the ones it first scanned.
+    slot.innerHTML = '';
+    const map = document.createElement('div');
+    map.className = 'seat-map';
+    map.setAttribute('role', 'region');
+    map.setAttribute('aria-label', 'Seat map');
+
+    const layout = document.createElement('div');
+    layout.className = 'seat-map-layout';
+
+    const cabin = document.createElement('div');
+    cabin.className = 'cabin';
+    const head = document.createElement('div');
+    head.className = 'cabin-row cabin-head';
+    head.innerHTML = '<span></span>' + COLUMNS.map((column, index) =>
+      (index === 3 ? '<span></span>' : '') + '<span class="col">' + column + '</span>').join('');
+    cabin.appendChild(head);
+
+    for (const row of ROWS) {
+      const line = document.createElement('div');
+      line.className = 'cabin-row';
+      const number = document.createElement('span');
+      number.className = 'row-num';
+      number.textContent = String(row);
+      line.appendChild(number);
+      COLUMNS.forEach((column, index) => {
+        if (index === 3) line.appendChild(document.createElement('span'));
+        const code = row + column;
+        const state = seatState(code);
+        const seat = document.createElement('button');
+        seat.type = 'button';
+        seat.className = 'seat';
+        seat.dataset.state = state;
+        seat.dataset.seat = code;
+        seat.textContent = column;
+        seat.disabled = state === 'booked';
+        seat.setAttribute('aria-label', 'Seat ' + code + ', ' + (state === 'selected' ? 'yours' : state));
+        seat.addEventListener('click', () => moveTo(code));
+        line.appendChild(seat);
+      });
+      cabin.appendChild(line);
+    }
+
+    const picker = document.createElement('div');
+    picker.className = 'picker';
+    picker.innerHTML =
+      '<h3>Passengers</h3><p class="hint">Select a passenger, then select a free seat on the map.</p>' +
+      '<div class="picker-list"></div>' +
+      '<ul class="legend"><li><i></i> Available</li><li><i class="booked"></i> Booked</li><li><i class="selected"></i> Selected</li></ul>' +
+      '<div class="map-actions"><button type="button" class="pill pill-primary" id="confirm-seats">Confirm seats</button>' +
+      '<button type="button" class="pill pill-outline" id="cancel-seats">Cancel</button></div>';
+    const pickerList = picker.querySelector('.picker-list');
+    for (const person of passengers) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.setAttribute('aria-pressed', String(person.id === picked));
+      button.setAttribute('aria-label', 'Move ' + person.name + ', seat ' + person.seat);
+      button.innerHTML = '<span>' + person.name + '</span><span>' + person.seat + '</span>';
+      button.addEventListener('click', () => {
+        picked = person.id;
+        renderSeatMap();
+      });
+      pickerList.appendChild(button);
+    }
+
+    layout.append(cabin, picker);
+    map.appendChild(layout);
+    slot.appendChild(map);
+
+    picker.querySelector('#confirm-seats').addEventListener('click', closeSeatMap);
+    picker.querySelector('#cancel-seats').addEventListener('click', closeSeatMap);
+  }
+
+  function moveTo(code) {
+    if (seatState(code) !== 'available') return;
+    const person = passengers.find((entry) => entry.id === picked);
+    person.seat = code;
+    renderSeatMap();
+  }
+
+  function closeSeatMap() {
+    slot.innerHTML = '';
+    renderPassengers();
+    changeButton.focus();
+  }
+
+  changeButton.addEventListener('click', renderSeatMap);
+  renderPassengers();
+
+  // --- The widget, embedded the way a customer embeds it. ---------------------------------
+  const embed = document.createElement('script');
+  embed.src = '/lantern.js';
+  embed.async = true;
+  embed.dataset.key = 'pk_dev_000000000000000000000000';
+  embed.dataset.api = 'http://localhost:4319';
+  embed.dataset.position = 'right';
+  document.body.appendChild(embed);
+</script>
+</body>
+</html>

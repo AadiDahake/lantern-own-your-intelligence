@@ -1,0 +1,771 @@
+{
+  "schema_version": "1",
+  "intent": "seat_party_together",
+  "summary": "Automatic family seat selection. Finds seats together for a travelling party and moves everyone in one step.",
+  "observation": {
+    "inputs": [
+      {
+        "name": "flight_id",
+        "type": "string",
+        "description": "The flight the reservation is on, e.g. NA214."
+      },
+      {
+        "name": "reservation_code",
+        "type": "string",
+        "description": "The confirmation code of the party's reservation."
+      },
+      {
+        "name": "passengers",
+        "type": "string[]",
+        "description": "Passenger ids of the party to seat together, in the reservation's order."
+      }
+    ],
+    "app_state": [
+      {
+        "name": "seat_map",
+        "type": "object",
+        "description": "Every row and seat with its live state: available, booked, blocked or occupied by this party."
+      },
+      {
+        "name": "available_seats",
+        "type": "string[]",
+        "description": "Seat ids a passenger could take right now."
+      },
+      {
+        "name": "restrictions",
+        "type": "object[]",
+        "description": "Per passenger: type, age, whether an exit row is allowed, whether they must sit with an adult."
+      },
+      {
+        "name": "seat_prices",
+        "type": "object",
+        "description": "Price in cents per seat id; zero for a standard seat."
+      }
+    ],
+    "interactive_elements": [
+      {
+        "type": "seat",
+        "id": {
+          "name": "seat_id",
+          "type": "string",
+          "description": "Row and column, e.g. 21A."
+        },
+        "attributes": [
+          {
+            "name": "row",
+            "type": "integer",
+            "range": {
+              "min": 1,
+              "max": 30
+            }
+          },
+          {
+            "name": "column",
+            "type": "string",
+            "enum": [
+              "A",
+              "B",
+              "C",
+              "D",
+              "E",
+              "F"
+            ]
+          },
+          {
+            "name": "state",
+            "type": "string",
+            "enum": [
+              "available",
+              "booked",
+              "blocked",
+              "occupied"
+            ]
+          },
+          {
+            "name": "is_exit_row",
+            "type": "boolean"
+          },
+          {
+            "name": "price_cents",
+            "type": "integer",
+            "range": {
+              "min": 0
+            }
+          }
+        ],
+        "constraints": [
+          "blocked seats are never assigned",
+          "exit rows are adults only",
+          "the aisle sits between C and D"
+        ],
+        "available_actions": [
+          "assign_seat",
+          "calculate_seat_price"
+        ]
+      }
+    ],
+    "example": {
+      "party_size": 3,
+      "current_seats": [
+        "12A",
+        "18C",
+        "24F"
+      ],
+      "available_seats": [
+        "21A",
+        "21B",
+        "21C"
+      ]
+    }
+  },
+  "actions": [
+    {
+      "name": "get_seat_map",
+      "kind": "read",
+      "description": "Read the whole cabin with the state of every seat.",
+      "returns": "SeatMap",
+      "primitive": {
+        "symbol": "getSeatMap",
+        "file": "lib/seats/index.ts",
+        "confidence": 0.96
+      },
+      "idempotent": true,
+      "params": [
+        {
+          "name": "flight_id",
+          "type": "string"
+        }
+      ],
+      "action_type": "invoke_function"
+    },
+    {
+      "name": "get_available_seats",
+      "kind": "read",
+      "description": "The ids of every seat a passenger could take right now.",
+      "returns": "string[]",
+      "primitive": {
+        "symbol": "getAvailableSeats",
+        "file": "lib/seats/index.ts",
+        "confidence": 0.97
+      },
+      "idempotent": true,
+      "params": [
+        {
+          "name": "flight_id",
+          "type": "string"
+        }
+      ],
+      "action_type": "invoke_function"
+    },
+    {
+      "name": "get_passenger_restrictions",
+      "kind": "read",
+      "description": "What one passenger may and may not do: exit rows, sitting apart from an adult.",
+      "returns": "PassengerRestrictions",
+      "primitive": {
+        "symbol": "getPassengerRestrictions",
+        "file": "lib/seats/index.ts",
+        "confidence": 0.95
+      },
+      "idempotent": true,
+      "params": [
+        {
+          "name": "passenger_id",
+          "type": "string"
+        }
+      ],
+      "action_type": "invoke_function"
+    },
+    {
+      "name": "calculate_seat_price",
+      "kind": "read",
+      "description": "What one seat costs, in cents.",
+      "returns": "number",
+      "primitive": {
+        "symbol": "calculateSeatPrice",
+        "file": "lib/seats/index.ts",
+        "confidence": 0.95
+      },
+      "idempotent": true,
+      "params": [
+        {
+          "name": "flight_id",
+          "type": "string"
+        },
+        {
+          "name": "seat_id",
+          "type": "string"
+        }
+      ],
+      "action_type": "invoke_function"
+    },
+    {
+      "name": "rank_seat_groups",
+      "kind": "rank",
+      "description": "Order every valid group of adjacent seats by the preferences: lowest added cost first, children beside an adult.",
+      "returns": "SeatGroup[]",
+      "params": [
+        {
+          "name": "groups",
+          "type": "object[]"
+        },
+        {
+          "name": "passengers",
+          "type": "object[]"
+        }
+      ],
+      "action_type": "invoke_function"
+    },
+    {
+      "name": "assign_seat",
+      "kind": "write",
+      "description": "Move one passenger to one seat. Atomic and idempotent; there is no bulk form.",
+      "returns": "AssignSeatResult",
+      "primitive": {
+        "symbol": "assignSeat",
+        "file": "lib/seats/index.ts",
+        "confidence": 0.97
+      },
+      "idempotent": true,
+      "params": [
+        {
+          "name": "passenger_id",
+          "type": "string"
+        },
+        {
+          "name": "seat_id",
+          "type": "string"
+        }
+      ],
+      "action_type": "invoke_function"
+    }
+  ],
+  "constraints": [
+    {
+      "id": "same_row",
+      "statement": "Every seat in the group is in the same row.",
+      "source": "trajectory"
+    },
+    {
+      "id": "contiguous",
+      "statement": "The seats are contiguous, with no empty seat and no other passenger between them.",
+      "source": "trajectory"
+    },
+    {
+      "id": "aisle_is_a_boundary",
+      "statement": "Seats on opposite sides of the aisle are not adjacent. A group never spans the aisle.",
+      "source": "repository"
+    },
+    {
+      "id": "available_only",
+      "statement": "Only seats that are available at the time of the call are used. A seat the party already holds counts as available to the party.",
+      "source": "repository"
+    },
+    {
+      "id": "blocked_seats_excluded",
+      "statement": "A seat held out of service for accessible seating is never used.",
+      "source": "policy"
+    },
+    {
+      "id": "respect_passenger_restrictions",
+      "statement": "A child is never placed in an exit row. A passenger who must sit with an adult is placed next to one.",
+      "source": "policy"
+    },
+    {
+      "id": "no_partial_moves",
+      "statement": "Applying a result moves every passenger or none. If one move fails, the passengers that were already moved return to their previous seats.",
+      "source": "inferred"
+    },
+    {
+      "id": "party_only",
+      "statement": "Only passengers of the given reservation can be moved. Anyone else is refused.",
+      "source": "policy"
+    }
+  ],
+  "preferences": [
+    {
+      "id": "minimize_additional_cost",
+      "statement": "Prefer the group with the lowest added cost over the party's current seats.",
+      "direction": "minimize",
+      "weight": 0.7
+    },
+    {
+      "id": "keep_children_adjacent_to_parent",
+      "statement": "Prefer groups where each child sits directly beside an adult of the party.",
+      "direction": "maximize",
+      "weight": 0.9
+    },
+    {
+      "id": "keep_current_seats_when_together",
+      "statement": "Prefer the party's current seats when they already satisfy every constraint.",
+      "direction": "maximize",
+      "weight": 0.5
+    }
+  ],
+  "success": {
+    "final_state": [
+      {
+        "id": "all_passengers_adjacent",
+        "statement": "After applying the result, every passenger of the party sits in one contiguous group in one row, on one side of the aisle."
+      },
+      {
+        "id": "no_constraint_violated",
+        "statement": "The applied seats satisfy every constraint at the moment of applying them."
+      },
+      {
+        "id": "cost_reported",
+        "statement": "The result states the added cost in cents before anything is applied."
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "three_contiguous_available",
+        "kind": "happy",
+        "given": "a party of one adult and two children in 12A, 18C and 24F, and row 21 A, B and C available",
+        "when": "the party asks for seats together",
+        "then": "the result is 21A, 21B and 21C with an added cost of 0"
+      },
+      {
+        "id": "aisle_separated_not_adjacent",
+        "kind": "edge",
+        "given": "a row where only C and D are available, on opposite sides of the aisle, and a party of two",
+        "when": "the party asks for seats together",
+        "then": "that row is not offered as a group"
+      },
+      {
+        "id": "no_three_seat_group",
+        "kind": "edge",
+        "given": "no row with three contiguous available seats on one side",
+        "when": "a party of three asks for seats together",
+        "then": "the result says no group is available and every passenger keeps their seat"
+      },
+      {
+        "id": "blocked_accessibility_seat_excluded",
+        "kind": "adversarial",
+        "given": "the only three-seat run in a row includes the blocked accessible seat",
+        "when": "a party of three asks for seats together",
+        "then": "that run is not offered and the blocked seat is never assigned"
+      },
+      {
+        "id": "exit_row_excluded_for_child",
+        "kind": "adversarial",
+        "given": "the only available three-seat runs are in exit rows and the party includes a child",
+        "when": "the party asks for seats together",
+        "then": "no exit row is offered and the result says no group is available"
+      },
+      {
+        "id": "exit_row_allowed_for_adults",
+        "kind": "edge",
+        "given": "a party of three adults and an available three-seat run in an exit row",
+        "when": "the party asks for seats together",
+        "then": "the exit row may be offered, with its price as the added cost"
+      },
+      {
+        "id": "seat_taken_during_checkout",
+        "kind": "concurrency",
+        "given": "a result of 21A, 21B and 21C, and 21B taken by another booking before the party applies it",
+        "when": "the party applies the result",
+        "then": "the apply fails with a seat-taken reason and every passenger of the party is back in their original seat"
+      },
+      {
+        "id": "existing_paid_seat_reflected_in_cost",
+        "kind": "edge",
+        "given": "one passenger already holds a paid extra-legroom seat and the offered group is in a standard row",
+        "when": "the party asks for seats together",
+        "then": "the added cost is 0 and the result notes the seat that is given up"
+      },
+      {
+        "id": "child_adjacent_to_adult",
+        "kind": "happy",
+        "given": "a party of one adult and two children and a three-seat run",
+        "when": "the party asks for seats together",
+        "then": "the adult is assigned the middle seat so each child sits beside the adult"
+      },
+      {
+        "id": "child_never_alone",
+        "kind": "adversarial",
+        "given": "a party of one adult and one child and two two-seat runs, one of which would leave the child beside a stranger",
+        "when": "the party asks for seats together",
+        "then": "the child is assigned the seat beside the adult"
+      },
+      {
+        "id": "duplicate_submission_idempotent",
+        "kind": "concurrency",
+        "given": "a result that has been applied once",
+        "when": "the same result is applied again",
+        "then": "nobody moves, nothing is charged twice, and the apply reports success"
+      },
+      {
+        "id": "insufficient_permission",
+        "kind": "permission",
+        "given": "a passenger id that belongs to a different reservation",
+        "when": "the party asks for seats together including that passenger",
+        "then": "the request is refused with a permission reason and nobody moves"
+      },
+      {
+        "id": "party_size_one",
+        "kind": "edge",
+        "given": "a party of one passenger",
+        "when": "the passenger asks for seats together",
+        "then": "the result is the passenger's current seat with an added cost of 0 and no move is needed"
+      },
+      {
+        "id": "party_larger_than_one_side",
+        "kind": "edge",
+        "given": "a party of four in a 3-3 cabin",
+        "when": "the party asks for seats together",
+        "then": "the result says no group is available, because a group never spans the aisle"
+      },
+      {
+        "id": "same_row_only",
+        "kind": "edge",
+        "given": "21C and 22A available and nothing else contiguous",
+        "when": "a party of two asks for seats together",
+        "then": "21C and 22A are not offered together"
+      },
+      {
+        "id": "minimize_additional_cost_preference",
+        "kind": "happy",
+        "given": "a free standard row and a paid bulkhead row that both fit the party",
+        "when": "the party asks for seats together",
+        "then": "the standard row is offered first with an added cost of 0"
+      },
+      {
+        "id": "keeps_current_seats_when_already_together",
+        "kind": "edge",
+        "given": "a party already seated in 21A, 21B and 21C",
+        "when": "the party asks for seats together",
+        "then": "the result is the current seats with an added cost of 0 and no move is needed"
+      },
+      {
+        "id": "result_reflects_live_availability",
+        "kind": "happy",
+        "given": "a seat that was available and then taken by another booking",
+        "when": "the party asks for seats together after the change",
+        "then": "the result contains only seats that are available at that moment"
+      },
+      {
+        "id": "apply_moves_every_passenger",
+        "kind": "happy",
+        "given": "a result of 21A, 21B and 21C for a party in 12A, 18C and 24F",
+        "when": "the party applies the result",
+        "then": "the seat map shows the three passengers in 21A, 21B and 21C"
+      },
+      {
+        "id": "apply_frees_previous_seats",
+        "kind": "happy",
+        "given": "a result applied for a party that held 12A, 18C and 24F",
+        "when": "the seat map is read again",
+        "then": "12A, 18C and 24F are available"
+      },
+      {
+        "id": "route_validates_input",
+        "kind": "permission",
+        "given": "the capability's API route",
+        "when": "it is called with a malformed body, or with a reservation that does not exist",
+        "then": "it answers 400 for the malformed body and 404 for the unknown reservation, and nobody moves"
+      }
+    ]
+  },
+  "proposed_ui": {
+    "location": "seat_map_toolbar",
+    "label": "Find seats together",
+    "affordance": "button",
+    "result_summary": "We found 3 seats together: 21A, 21B, 21C. Additional cost: $0. One action, Move everyone, applies it."
+  },
+  "evidence": {
+    "session_count": 63,
+    "median_manual_actions": 14.2,
+    "window": {
+      "from": "2026-07-30T00:00:00Z",
+      "to": "2026-08-29T00:00:00Z"
+    },
+    "trajectories": [
+      {
+        "session_id": "novaair-synth-001",
+        "reward": {
+          "completion": 5,
+          "coherence": 4,
+          "total": 4.5
+        },
+        "steps": [
+          {
+            "t": "2026-08-12T14:02:10Z",
+            "event": "seat_map_opened",
+            "props": {
+              "party_size": 3,
+              "current_seats": [
+                "12A",
+                "18C",
+                "24F"
+              ]
+            }
+          },
+          {
+            "t": "2026-08-12T14:02:19Z",
+            "event": "seat_hovered",
+            "props": {
+              "seat": "14B"
+            }
+          },
+          {
+            "t": "2026-08-12T14:02:24Z",
+            "event": "seat_hovered",
+            "props": {
+              "seat": "17E"
+            }
+          },
+          {
+            "t": "2026-08-12T14:02:41Z",
+            "event": "passenger_selected",
+            "props": {
+              "passenger_index": 0
+            }
+          },
+          {
+            "t": "2026-08-12T14:02:44Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "21A",
+              "passenger_index": 0
+            }
+          },
+          {
+            "t": "2026-08-12T14:02:52Z",
+            "event": "passenger_selected",
+            "props": {
+              "passenger_index": 1
+            }
+          },
+          {
+            "t": "2026-08-12T14:02:55Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "21B",
+              "passenger_index": 1
+            }
+          },
+          {
+            "t": "2026-08-12T14:03:01Z",
+            "event": "passenger_selected",
+            "props": {
+              "passenger_index": 2
+            }
+          },
+          {
+            "t": "2026-08-12T14:03:04Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "21C",
+              "passenger_index": 2
+            }
+          },
+          {
+            "t": "2026-08-12T14:03:12Z",
+            "event": "seat_assignment_confirmed",
+            "props": {
+              "seats": [
+                "21A",
+                "21B",
+                "21C"
+              ],
+              "same_row": true,
+              "contiguous": true
+            }
+          }
+        ]
+      },
+      {
+        "session_id": "novaair-synth-017",
+        "reward": {
+          "completion": 5,
+          "coherence": 3,
+          "total": 4
+        },
+        "steps": [
+          {
+            "t": "2026-08-15T09:11:02Z",
+            "event": "seat_map_opened",
+            "props": {
+              "party_size": 3,
+              "current_seats": [
+                "9C",
+                "16D",
+                "27A"
+              ]
+            }
+          },
+          {
+            "t": "2026-08-15T09:11:20Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "14A",
+              "passenger_index": 0
+            }
+          },
+          {
+            "t": "2026-08-15T09:11:31Z",
+            "event": "seat_selection_rejected",
+            "props": {
+              "seat": "14B",
+              "reason": "seat_booked"
+            }
+          },
+          {
+            "t": "2026-08-15T09:11:49Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "17D",
+              "passenger_index": 0
+            }
+          },
+          {
+            "t": "2026-08-15T09:11:58Z",
+            "event": "seat_selection_rejected",
+            "props": {
+              "seat": "17E",
+              "reason": "seat_booked"
+            }
+          },
+          {
+            "t": "2026-08-15T09:12:30Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "22D",
+              "passenger_index": 0
+            }
+          },
+          {
+            "t": "2026-08-15T09:12:41Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "22E",
+              "passenger_index": 1
+            }
+          },
+          {
+            "t": "2026-08-15T09:12:50Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "22F",
+              "passenger_index": 2
+            }
+          },
+          {
+            "t": "2026-08-15T09:13:02Z",
+            "event": "seat_assignment_confirmed",
+            "props": {
+              "seats": [
+                "22D",
+                "22E",
+                "22F"
+              ],
+              "same_row": true,
+              "contiguous": true
+            }
+          }
+        ]
+      },
+      {
+        "session_id": "novaair-synth-042",
+        "reward": {
+          "completion": 5,
+          "coherence": 4,
+          "total": 4.5
+        },
+        "steps": [
+          {
+            "t": "2026-08-21T18:40:05Z",
+            "event": "seat_map_opened",
+            "props": {
+              "party_size": 3,
+              "current_seats": [
+                "11F",
+                "19B",
+                "25C"
+              ]
+            }
+          },
+          {
+            "t": "2026-08-21T18:40:14Z",
+            "event": "seat_hovered",
+            "props": {
+              "seat": "23A"
+            }
+          },
+          {
+            "t": "2026-08-21T18:40:16Z",
+            "event": "seat_hovered",
+            "props": {
+              "seat": "23B"
+            }
+          },
+          {
+            "t": "2026-08-21T18:40:18Z",
+            "event": "seat_hovered",
+            "props": {
+              "seat": "23C"
+            }
+          },
+          {
+            "t": "2026-08-21T18:40:33Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "23B",
+              "passenger_index": 0
+            }
+          },
+          {
+            "t": "2026-08-21T18:40:47Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "23A",
+              "passenger_index": 1
+            }
+          },
+          {
+            "t": "2026-08-21T18:40:59Z",
+            "event": "seat_selected",
+            "props": {
+              "seat": "23C",
+              "passenger_index": 2
+            }
+          },
+          {
+            "t": "2026-08-21T18:41:10Z",
+            "event": "seat_assignment_confirmed",
+            "props": {
+              "seats": [
+                "23B",
+                "23A",
+                "23C"
+              ],
+              "same_row": true,
+              "contiguous": true
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "granularity": {
+    "replaces_atomic_steps_median": 14.2,
+    "rejected_too_low": [
+      "click_seat",
+      "click_next_row",
+      "hover_seat",
+      "select_passenger"
+    ],
+    "rejected_too_high": [
+      "manage_reservation",
+      "rebook_flight"
+    ],
+    "coverage": 0.87
+  },
+  "provenance": {
+    "compiler_version": "1",
+    "model": "gpt-5.6-luna",
+    "created_at": "2026-08-29T20:00:00Z",
+    "opportunity_id": "seat-families-together"
+  }
+}

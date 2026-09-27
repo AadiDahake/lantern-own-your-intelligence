@@ -1,0 +1,17 @@
+/*
+  Design tokens. Every colour in the app is one of these custom properties on :root.
+  Components never use literal colours; they use the Tailwind utilities mapped below
+  (bg-canvas, bg-surface, text-ink, text-muted, border-line, text-brand, ...).
+
+  A theme is a class on <html> that redefines these properties. There is no dark theme yet.
+*/
+:root {
+  --color-canvas: #f8f7f3;
+  --color-surface: #ffffff;
+  --color-sidebar: #ffffff;
+  --color-ink: #201f1c;
+  --color-muted: #615f57;
+  --color-line: rgba(0, 0, 0, 0.1);
+  --color-brand: #fa500f;
+  --color-hover: rgba(0, 0, 0, 0.04);
+}

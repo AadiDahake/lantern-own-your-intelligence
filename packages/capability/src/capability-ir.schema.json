@@ -1,0 +1,253 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lantern.dev/schema/capability-ir/v1.json",
+  "title": "Lantern Capability IR",
+  "description": "One missing product capability, inferred from real user trajectories, in the shape ASIL (Agent-Software Interaction Layer, arXiv 2608.26991) gives a software interface: a structured observation, schema-constrained semantic actions with typed params, hard constraints, and a final-state validator, plus the evidence that justifies it.",
+  "type": "object",
+  "required": ["intent", "observation", "actions", "constraints", "success", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": "1" },
+    "intent": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{2,63}$",
+      "description": "snake_case name of the capability, e.g. seat_party_together. Names a user goal, never a UI gesture."
+    },
+    "summary": { "type": "string", "maxLength": 280 },
+
+    "observation": {
+      "type": "object",
+      "description": "ASIL structured observation, as a schema: what the capability reads. `inputs` come from the caller, `app_state` is read from the product at call time, and `interactive_elements` are the things the actions address, each with a stable id, typed attributes, the constraints the product enforces on it and the actions that apply to it. Typed slots, never DOM selectors or pixels.",
+      "required": ["inputs", "app_state"],
+      "additionalProperties": false,
+      "properties": {
+        "inputs":               { "type": "array", "items": { "$ref": "#/$defs/slot" } },
+        "app_state":            { "type": "array", "items": { "$ref": "#/$defs/slot" } },
+        "interactive_elements": { "type": "array", "items": { "$ref": "#/$defs/element" } },
+        "example":              { "type": "object", "additionalProperties": true }
+      }
+    },
+
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "ASIL semantic actions the capability composes: code-executable operations, never clicks. Each must map to a real product primitive.",
+      "items": {
+        "type": "object",
+        "required": ["name", "kind", "params"],
+        "additionalProperties": false,
+        "properties": {
+          "name":        { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
+          "kind":        { "enum": ["read", "write", "rank"] },
+          "action_type": {
+            "enum": ["set_value", "invoke_function", "modify_file", "api_call", "navigate", "batch"],
+            "description": "ASIL action type: how the product realizes the action."
+          },
+          "target":      { "type": "string", "description": "The element type or resource the action addresses, e.g. seat." },
+          "description": { "type": "string" },
+          "params":      { "type": "array", "items": { "$ref": "#/$defs/slot" } },
+          "returns":     { "type": "string" },
+          "primitive": {
+            "type": "object",
+            "description": "Where this action already exists in the target repository. Absent means Codex must build it.",
+            "additionalProperties": false,
+            "properties": {
+              "symbol":     { "type": "string" },
+              "file":       { "type": "string" },
+              "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          },
+          "idempotent": { "type": "boolean" }
+        }
+      }
+    },
+
+    "constraints": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Hard rules. Violating any one makes the result wrong, not merely worse.",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement"],
+        "additionalProperties": false,
+        "properties": {
+          "id":           { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "statement":    { "type": "string" },
+          "source":       { "enum": ["trajectory", "documentation", "repository", "policy", "inferred"] },
+          "evidence_ref": { "type": "string" }
+        }
+      }
+    },
+
+    "preferences": {
+      "type": "array",
+      "description": "Soft rules used to rank candidate results. Never a reason to fail.",
+      "items": {
+        "type": "object",
+        "required": ["id", "statement", "direction"],
+        "additionalProperties": false,
+        "properties": {
+          "id":        { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "statement": { "type": "string" },
+          "direction": { "enum": ["minimize", "maximize"] },
+          "weight":    { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      }
+    },
+
+    "success": {
+      "type": "object",
+      "description": "ASIL final-state validator: the implementation is judged on the state it leaves, never on the steps it took. `final_state` holds the checks; `scenarios` the cases they are checked in.",
+      "required": ["final_state", "scenarios"],
+      "additionalProperties": false,
+      "properties": {
+        "final_state": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["id", "statement"],
+            "additionalProperties": false,
+            "properties": {
+              "id":        { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "statement": { "type": "string" }
+            }
+          }
+        },
+        "scenarios": {
+          "type": "array", "minItems": 1,
+          "description": "One test case each. The count of these is the demo's denominator, e.g. 21.",
+          "items": {
+            "type": "object",
+            "required": ["id", "given", "then"],
+            "additionalProperties": false,
+            "properties": {
+              "id":    { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+              "given": { "type": "string" },
+              "when":  { "type": "string" },
+              "then":  { "type": "string" },
+              "kind":  { "enum": ["happy", "edge", "adversarial", "concurrency", "permission"] }
+            }
+          }
+        }
+      }
+    },
+
+    "proposed_ui": {
+      "type": "object",
+      "description": "Where the capability should surface in the product. Advisory; the UX Builder persona owns the final design.",
+      "additionalProperties": false,
+      "properties": {
+        "location":       { "type": "string" },
+        "label":          { "type": "string" },
+        "affordance":     { "enum": ["button", "menu_item", "inline_panel", "modal", "toolbar_action"] },
+        "result_summary": { "type": "string" }
+      }
+    },
+
+    "evidence": {
+      "type": "object",
+      "description": "Why Lantern believes this capability is missing and wanted. Everything here comes from PostHog.",
+      "required": ["session_count", "trajectories"],
+      "additionalProperties": false,
+      "properties": {
+        "session_count":          { "type": "integer", "minimum": 1 },
+        "median_manual_actions":  { "type": "number" },
+        "window": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "from": { "type": "string", "format": "date-time" },
+                          "to":   { "type": "string", "format": "date-time" } }
+        },
+        "trajectories": {
+          "type": "array", "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["session_id", "steps"],
+            "additionalProperties": false,
+            "properties": {
+              "session_id": { "type": "string" },
+              "replay_url": { "type": "string", "format": "uri" },
+              "reward": {
+                "type": "object",
+                "description": "OS-Genesis trajectory reward model score. 1 to 5, graded, not binary.",
+                "additionalProperties": false,
+                "properties": {
+                  "completion": { "type": "number", "minimum": 1, "maximum": 5 },
+                  "coherence":  { "type": "number", "minimum": 1, "maximum": 5 },
+                  "total":      { "type": "number", "minimum": 1, "maximum": 5 }
+                }
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["t", "event"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "t":     { "type": "string", "format": "date-time" },
+                    "event": { "type": "string" },
+                    "props": { "type": "object", "additionalProperties": true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "granularity": {
+      "type": "object",
+      "description": "ToolCUA granularity justification. Records why this level of abstraction was chosen over the rejected ones.",
+      "additionalProperties": false,
+      "properties": {
+        "replaces_atomic_steps_median": { "type": "number" },
+        "rejected_too_low":  { "type": "array", "items": { "type": "string" } },
+        "rejected_too_high": { "type": "array", "items": { "type": "string" } },
+        "coverage": { "type": "number", "minimum": 0, "maximum": 1 }
+      }
+    },
+
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "compiler_version": { "type": "string" },
+        "model":            { "type": "string" },
+        "created_at":       { "type": "string", "format": "date-time" },
+        "opportunity_id":   { "type": "string" }
+      }
+    }
+  },
+
+  "$defs": {
+    "element": {
+      "type": "object",
+      "description": "An ASIL interactive element: a thing the actions address, with a stable id and typed attributes.",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "type":              { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "id":                { "$ref": "#/$defs/slot" },
+        "attributes":        { "type": "array", "items": { "$ref": "#/$defs/slot" } },
+        "constraints":       { "type": "array", "items": { "type": "string" } },
+        "available_actions": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name":        { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$" },
+        "type":        { "enum": ["string", "number", "integer", "boolean", "string[]", "number[]", "object", "object[]"] },
+        "description": { "type": "string" },
+        "required":    { "type": "boolean", "default": true },
+        "enum":        { "type": "array", "items": {} },
+        "range": {
+          "type": "object", "additionalProperties": false,
+          "properties": { "min": { "type": "number" }, "max": { "type": "number" } }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "columns": [
+    "matching_sessions",
+    "median_manual_actions",
+    "median_interactions"
+  ],
+  "results": [
+    [
+      65,
+      30,
+      14
+    ]
+  ]
+}

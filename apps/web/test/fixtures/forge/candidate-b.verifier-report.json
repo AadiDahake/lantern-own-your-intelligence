@@ -1,0 +1,133 @@
+{
+  "scenarios": [
+    {
+      "id": "three_contiguous_available",
+      "passed": true,
+      "test_name": "seat_party_together > three_contiguous_available",
+      "notes": ""
+    },
+    {
+      "id": "aisle_separated_not_adjacent",
+      "passed": true,
+      "test_name": "seat_party_together > aisle_separated_not_adjacent",
+      "notes": ""
+    },
+    {
+      "id": "no_three_seat_group",
+      "passed": true,
+      "test_name": "seat_party_together > no_three_seat_group",
+      "notes": ""
+    },
+    {
+      "id": "blocked_accessibility_seat_excluded",
+      "passed": true,
+      "test_name": "seat_party_together > blocked_accessibility_seat_excluded",
+      "notes": ""
+    },
+    {
+      "id": "exit_row_excluded_for_child",
+      "passed": true,
+      "test_name": "seat_party_together > exit_row_excluded_for_child",
+      "notes": ""
+    },
+    {
+      "id": "exit_row_allowed_for_adults",
+      "passed": true,
+      "test_name": "seat_party_together > exit_row_allowed_for_adults",
+      "notes": ""
+    },
+    {
+      "id": "seat_taken_during_checkout",
+      "passed": true,
+      "test_name": "seat_party_together > seat_taken_during_checkout",
+      "notes": ""
+    },
+    {
+      "id": "existing_paid_seat_reflected_in_cost",
+      "passed": true,
+      "test_name": "seat_party_together > existing_paid_seat_reflected_in_cost",
+      "notes": ""
+    },
+    {
+      "id": "child_adjacent_to_adult",
+      "passed": true,
+      "test_name": "seat_party_together > child_adjacent_to_adult",
+      "notes": ""
+    },
+    {
+      "id": "child_never_alone",
+      "passed": true,
+      "test_name": "seat_party_together > child_never_alone",
+      "notes": ""
+    },
+    {
+      "id": "duplicate_submission_idempotent",
+      "passed": true,
+      "test_name": "seat_party_together > duplicate_submission_idempotent",
+      "notes": ""
+    },
+    {
+      "id": "insufficient_permission",
+      "passed": true,
+      "test_name": "seat_party_together > insufficient_permission",
+      "notes": ""
+    },
+    {
+      "id": "party_size_one",
+      "passed": true,
+      "test_name": "seat_party_together > party_size_one",
+      "notes": ""
+    },
+    {
+      "id": "party_larger_than_one_side",
+      "passed": true,
+      "test_name": "seat_party_together > party_larger_than_one_side",
+      "notes": ""
+    },
+    {
+      "id": "same_row_only",
+      "passed": true,
+      "test_name": "seat_party_together > same_row_only",
+      "notes": ""
+    },
+    {
+      "id": "minimize_additional_cost_preference",
+      "passed": true,
+      "test_name": "seat_party_together > minimize_additional_cost_preference",
+      "notes": ""
+    },
+    {
+      "id": "keeps_current_seats_when_already_together",
+      "passed": true,
+      "test_name": "seat_party_together > keeps_current_seats_when_already_together",
+      "notes": ""
+    },
+    {
+      "id": "result_reflects_live_availability",
+      "passed": true,
+      "test_name": "seat_party_together > result_reflects_live_availability",
+      "notes": ""
+    },
+    {
+      "id": "apply_moves_every_passenger",
+      "passed": true,
+      "test_name": "seat_party_together > apply_moves_every_passenger",
+      "notes": ""
+    },
+    {
+      "id": "apply_frees_previous_seats",
+      "passed": true,
+      "test_name": "seat_party_together > apply_frees_previous_seats",
+      "notes": ""
+    },
+    {
+      "id": "route_validates_input",
+      "passed": true,
+      "test_name": "seat_party_together > route_validates_input",
+      "notes": ""
+    }
+  ],
+  "test_command": "npm test",
+  "test_file": "tests/seat-party-together.test.ts",
+  "summary": "21 of 21 scenarios pass. Every scenario passes."
+}

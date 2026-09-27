@@ -1,0 +1,59 @@
+name: CI
+
+# Every pull request is proven green before it merges, and main is checked again after it lands.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# One run per ref. A new push cancels the run still in flight for the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm run lint
+
+      - run: npm test
+
+      # The build reads no secret. Every accessor in apps/web/lib/env.ts resolves at call time,
+      # so a variable that is missing fails the one request that needed it, never the build.
+      - run: npm run build
+
+  worker:
+    name: worker
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/worker
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: services/worker/uv.lock
+
+      # --frozen fails rather than silently resolving, so uv.lock stays the single source of truth.
+      - run: uv sync --frozen
+
+      - run: uv run --frozen pytest
