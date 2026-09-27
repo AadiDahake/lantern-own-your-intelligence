@@ -2,20 +2,21 @@ import { Reveal } from "./Reveal";
 
 const STAGES = [
   { label: "Widget on your page", tone: "neutral" },
-  { label: "Three checks", tone: "neutral" },
+  { label: "Checks in parallel", tone: "neutral" },
   { label: "Verdict", tone: "accent" },
-  { label: "Issue and draft PR", tone: "neutral" },
+  { label: "Team room", tone: "neutral" },
+  { label: "Factory and draft PR", tone: "neutral" },
   { label: "Your approval", tone: "soft" },
 ] as const;
 
 const FACTS = [
-  "Three checks before a verdict.",
+  "Every check back before a verdict.",
   "One human approval before a merge.",
   "Every step written to the trace.",
 ] as const;
 
 /**
- * The five stages, laid out so they always fit the card they sit in.
+ * The stages, laid out so they always fit the card they sit in.
  *
  * The stages share the width equally in a grid rather than sitting in a row wide enough to need
  * its own scrollbar, and the connector between them is a hairline drawn in the gap, so it costs
@@ -32,9 +33,9 @@ export function Pipeline() {
               <span className="font-medium text-accent italic">record.</span>
             </h2>
           </div>
-          <p className="leading-relaxed text-ink/60 lg:col-span-4">
-            One trace per conversation. Every probe, verdict, model call and artefact is written
-            down as it happens, and streamed to the console live.
+          <p className="leading-relaxed text-pretty text-ink/60 lg:col-span-4">
+            One trace per conversation. Every probe, verdict, model call, stored route and
+            artefact is written down as it happens, and streamed to the console live.
           </p>
         </div>
 
