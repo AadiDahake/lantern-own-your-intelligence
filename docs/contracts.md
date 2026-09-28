@@ -828,7 +828,12 @@ group id. Two rows land on the conversation that triggered the run with `source:
 control it expected is not on the page after a re-scan. `continueGuidance` records the page,
 reads the last answer's target (the `control` of its last step) and recomputes the route over the
 graph from the page as it is now, with no model. Only when the graph has no route from this page
-does one `MODELS.plan` call read the page and name the steps that are left. The answer carries
+does a model read the page. When `RIVER_API_KEY` is set, the trained River guide
+(`apps/web/lib/guide/provider.ts`) gets the goal, the names already walked and the visible controls,
+and has 8 seconds to name the next control; a control it names that the widget sent becomes the one
+step left. Otherwise, or when it names nothing on the page, fails or times out, one `MODELS.plan`
+call names the steps that are left. One trace event says which of the two chose, and why River did
+not. The answer carries
 `routeChanged: true` whenever the remaining steps differ from the ones the user was told.
 
 The console links back to the customer's site with `?lantern_ask=<question>`; the widget reads that

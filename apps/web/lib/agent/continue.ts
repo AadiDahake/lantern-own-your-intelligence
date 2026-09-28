@@ -6,9 +6,21 @@
  * the page after a re-scan, so something about the route has changed. The route is recomputed
  * over the site graph from the page as it is now, with no model; only when the graph cannot
  * connect the pages does one small model call read the page and name the steps that are left.
+ * That call goes to the trained River guide first, because "which control comes next on this page"
+ * is the decision it learned, and to OpenAI when the guide is off or gives no usable answer.
  */
-import { EFFORT, MODELS, MAX_ROUTE_STEPS, controlKey, planRoute, validatePlan } from "@lantern/shared";
-import type { PageContext, Step } from "@lantern/shared";
+import {
+  EFFORT,
+  MODELS,
+  MAX_ROUTE_STEPS,
+  advanceOnFor,
+  captionFor,
+  controlKey,
+  planRoute,
+  validatePlan,
+} from "@lantern/shared";
+import type { Affordance, PageContext, Step } from "@lantern/shared";
+import { askGuide, type GuideRunner } from "../guide/provider";
 import { chatJson } from "../openai";
 import { serviceClient } from "../supabase";
 import { emitTrace } from "../trace";
@@ -66,6 +78,17 @@ const SYSTEM = [
   "Return an empty list when the task is finished and nothing on this page is left to do.",
   "At most 3 steps. Each caption is at most 12 words and starts with a verb. JSON only.",
 ].join(" ");
+
+/** The guide answers while the visitor waits mid-walk, so a slow answer loses to OpenAI. */
+const GUIDE_TIMEOUT_MS = 8_000;
+/** The training data gave the guide at most this many controls and walked names. */
+const GUIDE_MAX_CONTROLS = 40;
+const GUIDE_MAX_WALKED = 8;
+
+export type ContinueOptions = {
+  /** Replaces the process that asks River. Tests pass a fake. */
+  guideRunner?: GuideRunner;
+};
 
 type LastAnswer = { content: string; steps: Step[] | null; grounding: unknown };
 
@@ -126,9 +149,81 @@ async function continueOverGraph(input: ContinueInput, previous: LastAnswer): Pr
   return { text: previous.content, steps, routeChanged: !sameRoute(expected, steps) };
 }
 
-/** One small model call over the page as it is now, when the graph has no route to offer. */
-async function continueOnPage(input: ContinueInput, previous: LastAnswer): Promise<ContinueResult> {
+/** The names of the controls the visitor already pressed, the shape the guide was trained on. */
+function walkedSoFar(previous: LastAnswer, continueFrom: number): string[] {
+  const done = (previous.steps ?? []).slice(0, Math.max(continueFrom, 0));
+  return done.map((step) => step.control?.name ?? step.caption).slice(-GUIDE_MAX_WALKED);
+}
+
+/**
+ * The next step from the trained River guide, or null when it gives no usable answer. Each call
+ * writes one trace event that says which model chose the step, and why River did not.
+ */
+async function continueWithGuide(
+  input: ContinueInput,
+  previous: LastAnswer,
+  reachableAffordances: Affordance[],
+  options: ContinueOptions,
+): Promise<{ result: ContinueResult; model: string } | null> {
+  const started = Date.now();
+  const controls = reachableAffordances
+    .slice(0, GUIDE_MAX_CONTROLS)
+    .map(({ id, role, name, state }) => (state ? { id, role, name, state } : { id, role, name }));
+  const answer = await askGuide(input.question, controls, {
+    walked: walkedSoFar(previous, input.continueFrom),
+    timeoutMs: GUIDE_TIMEOUT_MS,
+    runner: options.guideRunner,
+  });
+  const chosen = answer.choice && reachableAffordances.find((affordance) => affordance.id === answer.choice?.id);
+  const step: Step | null = chosen
+    ? { target: chosen.id, caption: captionFor(chosen), advanceOn: advanceOnFor(chosen, false) }
+    : null;
+  const steps = step ? validatePlan([step], reachableAffordances) : null;
+  const latencyMs = Date.now() - started;
+
+  if (!answer.choice || !steps) {
+    const reason = answer.reason ?? "the chosen control failed the plan check";
+    void emitTrace({
+      projectId: input.projectId,
+      conversationId: input.conversationId,
+      kind: "decision",
+      title: `River guide model gave no answer, OpenAI chose the next step (${reason})`,
+      detail: { purpose: "the next control on this page", reason, fallback: MODELS.plan, latencyMs },
+      source: "agent",
+    });
+    return null;
+  }
+
+  const { checkpoint, baseModel } = answer.choice;
+  void emitTrace({
+    projectId: input.projectId,
+    conversationId: input.conversationId,
+    kind: "model",
+    title: `Next step chosen by the River guide model (checkpoint ${checkpoint})`,
+    detail: {
+      model: baseModel,
+      checkpoint,
+      purpose: "the next control on this page",
+      output_summary: steps.map((s) => s.caption).join(" / "),
+      latencyMs,
+    },
+    source: "agent",
+  });
+  return { result: { text: previous.content, steps, routeChanged: true }, model: `River guide ${checkpoint}` };
+}
+
+/**
+ * One model call over the page as it is now, when the graph has no route to offer: the River
+ * guide first, then OpenAI.
+ */
+async function continueOnPage(
+  input: ContinueInput,
+  previous: LastAnswer,
+  options: ContinueOptions,
+): Promise<{ result: ContinueResult; model: string }> {
   const reachableAffordances = visibleAffordances(input.page);
+  const guided = await continueWithGuide(input, previous, reachableAffordances, options);
+  if (guided) return guided;
   const grounding = previous.grounding ? JSON.stringify(previous.grounding).slice(0, 4000) : "none";
   const { steps: proposed } = await chatJson<{ steps: Step[] }>(
     MODELS.plan,
@@ -157,16 +252,21 @@ async function continueOnPage(input: ContinueInput, previous: LastAnswer): Promi
     reachable.push(step);
   }
   const steps = validatePlan(reachable, reachableAffordances);
-  return { text: previous.content, steps, routeChanged: true };
+  return { result: { text: previous.content, steps, routeChanged: true }, model: MODELS.plan };
 }
 
-export async function continueGuidance(input: ContinueInput): Promise<ContinueResult> {
+export async function continueGuidance(
+  input: ContinueInput,
+  options: ContinueOptions = {},
+): Promise<ContinueResult> {
   const started = Date.now();
   const previous = await lastAssistantMessage(input.conversationId);
   if (!previous) return { text: "", steps: null, routeChanged: false };
 
   const overGraph = await continueOverGraph(input, previous).catch(() => null);
-  const result = overGraph ?? (await continueOnPage(input, previous));
+  const { result, model } = overGraph
+    ? { result: overGraph, model: null }
+    : await continueOnPage(input, previous, options);
   const latencyMs = Date.now() - started;
   void emitTrace({
     projectId: input.projectId,
@@ -174,7 +274,7 @@ export async function continueGuidance(input: ContinueInput): Promise<ContinueRe
     kind: overGraph ? "decision" : "model",
     title: overGraph ? "Re-planned the route over the product map" : "Continued the walkthrough",
     detail: {
-      ...(overGraph ? {} : { model: MODELS.plan }),
+      ...(model ? { model } : {}),
       purpose: overGraph
         ? "the control the widget expected was not on the page, so the route was recomputed"
         : "the product map has no route from this page, so the page itself was read",
