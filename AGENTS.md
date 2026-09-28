@@ -246,7 +246,8 @@ walk honest, and each has a regression test in `packages/widget/test`:
 The widget also teaches the graph: `guide/transitions.ts` remembers the control a visitor pressed
 and reports the page they landed on to `POST /api/site/observe`, once per route and move per
 session. The continuation in `apps/web/lib/agent/continue.ts` recomputes the route over the graph
-with no model; a model reads the page only when the graph has no route from it.
+with no model; a model reads the page only when the graph has no route from it: the trained River
+guide first when it is configured, then `MODELS.plan`.
 
 ## When the widget speaks
 

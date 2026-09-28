@@ -64,6 +64,50 @@ export function parseChoice(stdout: string, controls: GuideControl[]): GuideChoi
   return { id, checkpoint, baseModel };
 }
 
+/** The guide's answer, or why there is none, so a caller can say which path it took. */
+export type GuideAnswer = { choice: GuideChoice; reason?: undefined } | { choice: null; reason: string };
+
+export type AskGuideOptions = {
+  /** The names of the controls already pressed on this walk, oldest first, as in training. */
+  walked?: string[];
+  timeoutMs?: number;
+  runner?: GuideRunner;
+};
+
+/**
+ * Ask the trained guide which control comes next, and say why when it gives no usable answer:
+ * River is not configured, the call failed or ran past `timeoutMs`, or the answer names a control
+ * that is not in `controls`.
+ */
+export async function askGuide(
+  question: string,
+  controls: GuideControl[],
+  options: AskGuideOptions = {},
+): Promise<GuideAnswer> {
+  const config = riverGuide();
+  if (!config) return { choice: null, reason: "River guide model is not configured" };
+  if (controls.length === 0) return { choice: null, reason: "no controls on the page" };
+  const run = options.runner ?? spawnRunner(config.uv, config.script);
+  const timeoutMs = options.timeoutMs ?? TIMEOUT_MS;
+  const walked = options.walked ?? [];
+  const input = JSON.stringify(walked.length > 0 ? { question, walked, controls } : { question, controls });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), timeoutMs);
+  });
+  try {
+    const stdout = await Promise.race([run(input, timeoutMs), timedOut]);
+    if (stdout === "timeout") return { choice: null, reason: `no answer within ${timeoutMs / 1000} s` };
+    const choice = parseChoice(stdout, controls);
+    return choice ? { choice } : { choice: null, reason: "the answer named no control on the page" };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { choice: null, reason: `the River call failed: ${message.slice(0, 200)}` };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Ask the trained guide which control answers `question`. Null when River is not configured, the
  * call fails, or the answer names a control that is not in `controls`.
@@ -73,12 +117,5 @@ export async function chooseControl(
   controls: GuideControl[],
   runner?: GuideRunner,
 ): Promise<GuideChoice | null> {
-  const config = riverGuide();
-  if (!config || controls.length === 0) return null;
-  const run = runner ?? spawnRunner(config.uv, config.script);
-  try {
-    return parseChoice(await run(JSON.stringify({ question, controls }), TIMEOUT_MS), controls);
-  } catch {
-    return null;
-  }
+  return (await askGuide(question, controls, { runner })).choice;
 }

@@ -38,6 +38,9 @@ training data, so `eval.py` measures the two systems on tasks the guide never sa
 | `runs/<id>/eval.md` | The comparison table |
 | `runs/latest.json` | The checkpoint that `choose.py` and the web app serve |
 
-The web app asks the guide through `apps/web/lib/guide/provider.ts` (`chooseControl`). River
-serves a checkpoint over gRPC only, so the provider runs `choose.py`. With no `RIVER_API_KEY` the
-provider is off and the product behaves as before.
+The web app asks the guide through `apps/web/lib/guide/provider.ts` (`askGuide`) when a walk is
+under way and the product map has no route from the page (`apps/web/lib/agent/continue.ts`). It
+sends the same shape as training: the goal, the names walked, and the controls. An answer that is
+late (8 s), broken, or names no control on the page falls back to OpenAI, and the trace says which
+model chose. River serves a checkpoint over gRPC only, so the provider runs `choose.py`. With no
+`RIVER_API_KEY` the provider is off and the product behaves as before.
