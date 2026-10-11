@@ -64,6 +64,14 @@
     {
       "in": "",
       "out": ""
+    },
+    {
+      "in": "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007\b\t\n\u000b\f\r\u000e\u000f\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017\u0018\u0019\u001a\u001b\u001c\u001d\u001e\u001f !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~\u007f",
+      "out": "!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ(/)_'abcdefghijklmnopqrstuvwxyz(/)-"
+    },
+    {
+      "in": "x\u2018x,x\u2019x,x\u201ax,x\u2032x,x`x,x\u201cx,x\u201dx,x\u201ex,x\u2033x,x\u00abx,x\u00bbx,x\u2010x,x\u2011x,x\u2012x,x\u2013x,x\u2014x,x\u2015x,x\u2212x,x\u2022x,x\u00b7x,x~x,x\u2044x,x\u00f7x,x\\x,x|x,x\u00d7x,x\u2026x,x[x,x{x,x]x,x}x,x\tx,x\rx,x\u00dfx,x\u00e6x,x\u00c6x,x\u0153x,x\u0152x,x\u00f8x,x\u00d8x,x\u0142x,x\u0141x,x\u0111x,x\u0110x,x\u20acx,x\u00a3x",
+      "out": "x'x,x'x,x'x,x'x,x'x,x\"x,x\"x,x\"x,x\"x,x\"x,x\"x,x-x,x-x,x-x,x-x,x-x,x-x,x-x,x-x,x-x,x-x,x/x,x/x,x/x,x/x,xxx,x...x,x(x,x(x,x)x,x)x,x x,x\nx,xssx,xaex,xAEx,xoex,xOEx,xox,xOx,xlx,xLx,xdx,xDx,xEURx,xGBPx"
     }
   ],
   "cut": [
@@ -106,6 +114,11 @@
       "in": "abcdef",
       "max": -5,
       "out": ""
+    },
+    {
+      "in": "abcdef",
+      "max": 2.5,
+      "out": "ab"
     }
   ],
   "notice": [

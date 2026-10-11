@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import tempfile
@@ -12,12 +13,14 @@ from pathlib import Path
 
 import config
 from models import Approval, Draft, FeatureRequestInput, IssueRef, Outcome, Plan, PrRef
-from steps import codegen, db, deploy, drafting, issue as issue_text, llm, mcp_github, repo, slack, trace
+from steps import codegen, db, deploy, drafting, issue as issue_text, llm, mcp_github, repo, slack, sms_notice, trace
 from steps.github import GitHubClient
 from steps.github_token import project_token
 from steps.reporter import Reporter
 
 PAUSE_LABEL = "Merge this pull request?"
+
+log = logging.getLogger("lantern.pipeline")
 
 # How long a run that lost the race for a group's issue waits for the winner to file it, and how
 # often it looks. Filing an issue is a handful of GitHub calls, so half a minute is generous; a
@@ -322,6 +325,22 @@ def draft_implementation(req: FeatureRequestInput, issue: IssueRef, plan: Plan) 
 
 # ---- 4. open_draft_pr ---------------------------------------------------------
 
+def _text_the_people_who_asked(req: FeatureRequestInput, reporter: Reporter) -> None:
+    """Text each person who asked to hear about this gap, one time, and say so in the trace.
+
+    The row is written before the pull request row, so the trace still ends on the pull request
+    and the card. Nothing here fails the run: the notice itself never raises, and a row that could
+    not be written is not worth a pull request that is open and has nobody waiting on its approval.
+    """
+    title, state, detail = sms_notice.notice_trace(sms_notice.draft_notice(req.project_id, req.group_id))
+    try:
+        reporter.status(title, state, detail)
+    except Exception as error:  # noqa: BLE001 - see above
+        # The kind of failure only: the words of an error are not written where a person's
+        # number was just handled.
+        log.warning("the text notice row could not be written (%s)", type(error).__name__)
+
+
 def open_draft_pr(req: FeatureRequestInput, issue: IssueRef, plan: Plan, draft: Draft) -> PrRef:
     _set_status(req, "pr_open")
     reporter = Reporter(req.project_id, req.escalation_id)
@@ -371,6 +390,7 @@ def open_draft_pr(req: FeatureRequestInput, issue: IssueRef, plan: Plan, draft: 
         )
 
     slack.notify(f"Lantern drafted {ref.url} for \"{req.title}\" and it is waiting for approval in the console.")
+    _text_the_people_who_asked(req, reporter)
     _set_status(req, "awaiting_approval")
     _set_group(req, status="awaiting_approval")
     # The last two rows a reader sees: the pull request itself, then the card that asks them to

@@ -7,8 +7,8 @@
  * dump on its own still yields no usable token and no phone number. Each kind of value has its own
  * purpose string, so a value sealed for one purpose does not open under another.
  *
- * The worker reads the same format (`services/worker/steps/github_token.py`), so the two must stay
- * in step: AES-256-GCM, the key is scrypt(service role key, "lantern:<purpose>", 32) with Node's
+ * The worker reads the same format (`services/worker/steps/seal.py`), so the two must stay in
+ * step: AES-256-GCM, the key is scrypt(service role key, "lantern:<purpose>", 32) with Node's
  * defaults, and the stored value is `iv.ciphertext.tag`, each part base64url without padding.
  */
 import { createCipheriv, createDecipheriv, createHmac, randomBytes, scryptSync } from "node:crypto";

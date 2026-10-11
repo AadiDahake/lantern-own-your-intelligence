@@ -71,6 +71,25 @@ describe("sendSms", () => {
     expect(calls).toHaveLength(1);
   });
 
+  it.each([`sent to ${TO}`, TO, "0".repeat(65), "", "a b"])(
+    "does not keep a message id that is free text (%j), and the text is still sent",
+    async (id) => {
+      const { fetchImpl } = fetchReturning(() => jsonResponse({ message: { id } }, 201));
+      expect(await sendSms(SENDER, { to: TO, body: "hello" }, { fetchImpl })).toEqual({ state: "sent", id: null });
+    },
+  );
+
+  it("reads a 303 as unconfirmed, because it says that the request was done, and does not follow it", async () => {
+    const { fetchImpl, calls } = fetchReturning(
+      () => new Response(null, { status: 303, headers: { location: "https://elsewhere.test/" } }),
+    );
+    expect(await sendSms(SENDER, { to: TO, body: "hello" }, { fetchImpl })).toEqual({
+      state: "unconfirmed",
+      reason: "http_303",
+    });
+    expect(calls).toHaveLength(1);
+  });
+
   it.each([301, 302, 307, 308])("reads a %i as refused for everyone: the address is wrong and nothing was sent", async (status) => {
     const { fetchImpl, calls } = fetchReturning(
       () => new Response(null, { status, headers: { location: "https://elsewhere.test/" } }),

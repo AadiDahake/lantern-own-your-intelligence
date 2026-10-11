@@ -10,6 +10,10 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role")
 os.environ.setdefault("GITHUB_TOKEN", "test-github-token")
 os.environ.setdefault("VERCEL_TOKEN", "test-vercel-token")
 
+# Text messages are off unless a test turns them on, whatever the shell that runs the suite holds.
+for name in ("DIAL_API_KEY", "DIAL_FROM_NUMBER", "DIAL_API_URL"):
+    os.environ.pop(name, None)
+
 # The retries in `steps/retry.py` are about a real network. In a test a refused connection is the
 # mock saying "nothing registered for that", so every attempt is made at once: the retrying is
 # still exercised, the waiting is not.

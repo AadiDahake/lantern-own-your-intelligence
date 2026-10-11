@@ -2,18 +2,19 @@
 
 FIXTURE is the output of
 
-    npx tsx apps/web/scripts/github-token-fixture.ts \\
+    npx tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/github-token-fixture.ts \\
       sbp_test_service_role_key_for_fixtures_only ghu_fixture_token_value_not_real
 
 so it was produced by `apps/web/lib/github/secret.ts` itself. The key and the token in it are
 throwaway strings, never a real credential. Regenerate it if that file's format ever changes.
+The format itself is read by `steps/seal.py`; `test_seal.py` holds the checks of the key.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from steps import github_token
+from steps import github_token, seal
 
 FIXTURE = {
     "serviceRoleKey": "sbp_test_service_role_key_for_fixtures_only",
@@ -47,26 +48,11 @@ def test_a_value_that_does_not_decrypt_reads_as_unlinked(stored: str) -> None:
     assert github_token.decrypt_token(stored, FIXTURE["serviceRoleKey"]) is None
 
 
-def test_the_key_matches_the_node_scrypt_parameters() -> None:
-    # Node's scryptSync defaults are N=16384, r=8, p=1, and the salt is the purpose string.
-    assert github_token.derive_key(FIXTURE["serviceRoleKey"]) == github_token.hashlib.scrypt(
-        FIXTURE["serviceRoleKey"].encode("utf-8"),
-        salt=b"lantern:github-token",
-        n=16384,
-        r=8,
-        p=1,
-        dklen=32,
-        maxmem=64 * 1024 * 1024,
-    )
-
-
 def test_project_token_prefers_the_linked_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         github_token.db, "get_project", lambda _id: {"github_token": FIXTURE["stored"]}
     )
-    monkeypatch.setattr(
-        github_token.config, "supabase_service_role_key", lambda: FIXTURE["serviceRoleKey"]
-    )
+    monkeypatch.setattr(seal.config, "supabase_service_role_key", lambda: FIXTURE["serviceRoleKey"])
     assert github_token.project_token("some-project") == FIXTURE["plain"]
 
 

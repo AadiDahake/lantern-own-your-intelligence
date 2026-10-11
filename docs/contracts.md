@@ -909,10 +909,14 @@ runner polls for rows with `status = 'queued'` and `engine = 'local'` and reads 
 
 A person who reported a gap can agree to one text message when the draft change for it opens.
 `gap_subscriber` holds one row for each person and gap. `apps/web/lib/sms` is the rule, and
-`apps/web/lib/dial.ts` is the only module in the web app that calls the provider.
+`apps/web/lib/dial.ts` is the only module in the web app that calls the provider. The worker has
+the same rule in `services/worker/steps/sms_notice.py`, and `steps/dial.py` is the only module
+there that calls the provider.
 
-- **Who sends it.** The forge engine, when it opens the draft pull request (`notifyDraft` in
-  `ForgeDeps`, wired in `lib/forge/queue.ts`). The `local` engine's worker does not send it.
+- **Who sends it.** The engine that opens the draft pull request. The forge engine sends it
+  through `notifyDraft` in `ForgeDeps`, wired in `lib/forge/queue.ts`. The `local` engine's worker
+  sends it in `open_draft_pr` (`steps/pipeline.py`), after it tells Slack. Each engine reads its
+  own environment, so under `local` the two variables must be set where the worker runs.
 - **Who writes a row.** No route writes `gap_subscriber`: the widget has no phone field and
   `POST /api/escalate` takes no number. The list is empty, and the trace row reads "Text notice: no
   one asked for a text about this request".
@@ -920,13 +924,25 @@ A person who reported a gap can agree to one text message when the draft change 
   is a second text. A sender claims a person first, with one conditional update that sets
   `notified_at` only where it is null, and sends only when the update returned the row. The client
   makes one attempt and nothing repeats it.
-- **How a send ends.** There are three results, and `sendSms` decides which one applies.
+- **How a send ends.** There are three results, and the client decides which one applies
+  (`sendSms`, and `send_sms` in the worker).
 
   | Result | When | What the store does |
   |---|---|---|
   | `sent` | A 2xx whose body is the provider's own answer, `{message: {...}}` | `phone_sealed` is set to null. The claim stays. |
-  | `refused` | Nothing was sent: any 4xx, a redirect (never followed), or a request that could not leave (connection refused, no such host, a base address that is not a URL) | `notified_at` goes back to null, so the text is still owed. The number stays. |
-  | `unconfirmed` | The text may have gone: a 5xx, a timeout, a connection that broke, or a 2xx that is not the provider's answer (a page from a wrong address) | The claim stays and the number is erased, so nobody sends it again. |
+  | `refused` | Nothing was sent: any 4xx, a redirect other than a 303 (never followed), or a request that could not leave (connection refused, no such host, a base address that is not a URL) | `notified_at` goes back to null, so the text is still owed. The number stays. |
+  | `unconfirmed` | The text may have gone: a 5xx, a 303 (it says "done, see there"), a timeout, a connection that broke, or a 2xx that is not the provider's answer (a page from a wrong address) | The claim stays and the number is erased, so nobody sends it again. |
+
+  The worker's client reads three more failures as `refused`, because its HTTP library can tell
+  that nothing was sent: a connection that did not open in time (to the provider or to a proxy in
+  front of it), a certificate that is not trusted (`untrusted_certificate`; the request is written
+  only after that check), and a key that cannot be a header (`bad_api_key`). In both engines a
+  timeout after the connection opened is `unconfirmed`, and so is an answer whose headers cannot
+  be read: the provider took that request. The worker also reads a status under 200 as
+  `unconfirmed`: its library can take an interim answer (a 102) for the last one. The worker reads
+  the body of an answer for at most 10 seconds and 64 kB, and a body it cannot read does not
+  change what the status says. A message id is kept only when it is a short token; any other
+  value is the provider's free text.
 
 - **When a pass stops.** At a refusal that is not about the person (`forAll`: 401, 402, a
   redirect, an address that cannot be reached) and at an `unconfirmed` result: the next send is
@@ -934,6 +950,13 @@ A person who reported a gap can agree to one text message when the draft change 
   one person their text and not everyone. A pass also stops after 200 people (`PASS_LIMIT`) or 60
   seconds (`PASS_BUDGET_MS`), because the run waits for it; the trace row then says `pass_limit`
   or `time_budget`. Every query of the store has a 10 second limit.
+- **What the worker repeats, and what it does not.** The send is one attempt in both engines. It
+  is the one call in the worker that does not go through `steps/retry.py`. The worker's store
+  calls do go through it, each request with the 10 second limit: a read and the erase of a number
+  are repeated after a blip, because a second one changes nothing. The claim and the release of a
+  claim are made one time. A claim that is repeated after a lost answer comes back empty when the
+  first one landed, and then nobody can say who holds the person. A release that is repeated can
+  free the claim of a run that took the person in between.
 - **Nothing starts a second pass by itself.** A person who is still owed after a pass gets the
   text when a later draft pull request opens for the same gap.
 - **What a stopped run leaves.** A run that stops between the claim and the record of the send
@@ -958,6 +981,14 @@ A person who reported a gap can agree to one text message when the draft change 
   A notice that fails never fails the run.
 - **A phone number is never logged.** It is in the sealed column and in the request body to the
   provider, and nowhere else: not in a trace row, an error, a reason code, or a console line.
+- **Two copies of one rule.** The text rules are in `packages/shared/src/sms.ts` and in
+  `services/worker/steps/sms_text.py`. `packages/shared/test/fixtures/sms-text.json` holds inputs
+  and the exact text each one becomes, and both test suites run every one of them, so a rule
+  changes in both files and in the fixture together. The sealed number has the same proof: the
+  worker's `tests/test_seal.py` opens a value that `sealPhone` wrote. One difference is known. An
+  accented letter is folded with the Unicode data of the runtime, so a character that a newer
+  Unicode version added can fold to a letter in one runtime and to nothing in the other. Both
+  results are in the basic SMS alphabet.
 
 With `DIAL_API_KEY` or `DIAL_FROM_NUMBER` blank the notice is off, the table is not read, and the
 run is the same as before, plus the one trace row.
@@ -1061,7 +1092,9 @@ Notes the API enforces:
 
 The provider is Dial. `SMS` in `@lantern/shared` holds the two paths and the caps,
 `apps/web/lib/dial.ts` is the only module in the web app that calls it, and the base address is
-`DIAL_API_URL`. Nothing else names an endpoint.
+`DIAL_API_URL`. The worker has the same two pieces: `steps/sms_text.py` holds the send path and
+the cap, and `steps/dial.py` is the only module in the worker that calls the provider. Nothing
+else names an endpoint.
 
 Chosen on **2026-10-11** by reading <https://docs.getdial.ai> and the OpenAPI document it links.
 
@@ -1145,4 +1178,5 @@ Codex inside a devbox, optional locally where the saved Codex login is used. Rou
 `LANTERN_ROUTE_MEMORY=local` turns it on with no Memorable key, and `LANTERN_ROUTE_MEMORY_DIR` is
 where the store keeps one JSON file per project (default the OS temp dir). Text messages:
 `DIAL_API_KEY` and `DIAL_FROM_NUMBER` turn them on together, and they are off when one is blank;
-`DIAL_API_URL` is the API base (default `https://api.getdial.ai`).
+`DIAL_API_URL` is the API base (default `https://api.getdial.ai`). The worker reads the same three
+names from its own environment (`services/worker/config.py`).

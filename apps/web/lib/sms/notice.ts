@@ -2,7 +2,9 @@
  * The one text a person asked for: sent when the draft change for the gap they reported opens.
  *
  * This module is the rule and nothing else. The list of people comes from a `NoticeStore` and the
- * send is a function, so a test runs the whole rule with no database and no provider.
+ * send is a function, so a test runs the whole rule with no database and no provider. The worker
+ * has the same rule for the `local` engine (`services/worker/steps/sms_notice.py`); change them
+ * together.
  *
  * One gap is one text for one person, however the runs overlap:
  *

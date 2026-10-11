@@ -3,6 +3,10 @@
  *
  * The limits and the path were read from https://docs.getdial.ai on 2026-10-11. The reason for
  * each one is in `docs/contracts.md` section 5.
+ *
+ * The worker has its own copy of these rules (`services/worker/steps/sms_text.py`), and the two
+ * must give the same text. `test/fixtures/sms-text.json` is run by both test suites; change a rule
+ * in both files and in the fixture together.
  */
 export const SMS = {
   /** `POST`: send one message. The call has no idempotency key, so a caller never repeats it. */

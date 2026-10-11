@@ -2,6 +2,8 @@
 
 Every call goes out through `steps.retry.send`, so a dropped connection to Supabase costs a moment
 rather than the whole escalation. The note in `retry.py` says what is retried and what is not.
+Two writes are made one time and never repeated, the claim of a person who asked for a text and
+the release of that claim; the note on each says why.
 """
 
 from __future__ import annotations
@@ -139,6 +141,129 @@ def release_issue_slot(group_id: str, escalation_id: str) -> None:
         json={"issue_claim": None},
         timeout=TIMEOUT,
     )
+
+
+# The calls below are about `gap_subscriber`, the people who asked for one text about a gap. A run
+# waits for the text notice, so each of them has a shorter limit than the rest. Every query is
+# scoped to the project, and every query about a person is scoped to the gap too.
+SUBSCRIBER_TIMEOUT = 10
+
+
+def _subscriber(project_id: str, group_id: str, subscriber_id: str) -> dict[str, str]:
+    """One person's row, and only if it belongs to this project and this gap."""
+    return {"id": f"eq.{subscriber_id}", "project_id": f"eq.{project_id}", "group_id": f"eq.{group_id}"}
+
+
+def notice_names(project_id: str, group_id: str) -> tuple[str, str]:
+    """What a text names: the company the person knows, and the gap's title."""
+    project = _check(
+        retry.send(
+            "GET",
+            _url("project"),
+            params={"id": f"eq.{project_id}", "select": "name"},
+            headers=_headers(),
+            timeout=SUBSCRIBER_TIMEOUT,
+        )
+    )
+    group = _check(
+        retry.send(
+            "GET",
+            _url("feature_request_group"),
+            params={"id": f"eq.{group_id}", "project_id": f"eq.{project_id}", "select": "title"},
+            headers=_headers(),
+            timeout=SUBSCRIBER_TIMEOUT,
+        )
+    )
+    company = (project[0].get("name") if project else None) or ""
+    title = (group[0].get("title") if group else None) or ""
+    return str(company), str(title)
+
+
+def owed_subscribers(project_id: str, group_id: str, limit: int) -> list[dict[str, Any]]:
+    """The people who agreed to a text about this gap and have not had it, oldest first."""
+    response = retry.send(
+        "GET",
+        _url("gap_subscriber"),
+        params={
+            "project_id": f"eq.{project_id}",
+            "group_id": f"eq.{group_id}",
+            "notified_at": "is.null",
+            "phone_sealed": "not.is.null",
+            "select": "id,phone_sealed",
+            "order": "created_at.asc",
+            "limit": str(limit),
+        },
+        headers=_headers(),
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    return _check(response) or []
+
+
+def claim_subscriber(project_id: str, group_id: str, subscriber_id: str) -> bool:
+    """Take one person for this run. False when a different run already took them.
+
+    One conditional update on `notified_at`, the same shape as `claim_issue_slot`. It is made one
+    time: an update that is repeated after a lost answer comes back empty when the first one
+    landed, and then nobody can say who holds the claim.
+    """
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params={**_subscriber(project_id, group_id, subscriber_id), "notified_at": "is.null", "select": "id"},
+        headers=_headers("return=representation"),
+        json={"notified_at": _now()},
+        timeout=SUBSCRIBER_TIMEOUT,
+        attempts=1,
+    )
+    return bool(_check(response))
+
+
+def release_subscriber(project_id: str, group_id: str, subscriber_id: str) -> None:
+    """Give the claim back after a text that was refused, so the text is still owed.
+
+    It is made one time. A release that is repeated after a lost answer can free a claim that a
+    different run took in between, and that run's person would then get a second text.
+    """
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params=_subscriber(project_id, group_id, subscriber_id),
+        headers=_headers("return=minimal"),
+        json={"notified_at": None},
+        timeout=SUBSCRIBER_TIMEOUT,
+        attempts=1,
+    )
+    _check(response)
+
+
+def erase_subscriber_phone(project_id: str, group_id: str, subscriber_id: str) -> None:
+    """Erase the number after a text was sent, or may have gone. The claim stays."""
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params=_subscriber(project_id, group_id, subscriber_id),
+        headers=_headers("return=minimal"),
+        json={"phone_sealed": None},
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    _check(response)
+
+
+def forget_stale_subscribers(project_id: str, claimed_before: datetime) -> None:
+    """Erase the numbers of the project's claims that are older than any send can be."""
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params={
+            "project_id": f"eq.{project_id}",
+            "notified_at": f"lt.{claimed_before.isoformat()}",
+            "phone_sealed": "not.is.null",
+        },
+        headers=_headers("return=minimal"),
+        json={"phone_sealed": None},
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    _check(response)
 
 
 def emit_trace(

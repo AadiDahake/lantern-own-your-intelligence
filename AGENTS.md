@@ -211,6 +211,13 @@ log line or a reason code, and the provider's own error text is never copied, be
 the number. `apps/web/lib/dial.ts` is the only module in the web app that calls the provider.
 "The text notice" in section 4 of `docs/contracts.md` has the table and the outcomes.
 
+The worker sends the same text under the `local` engine, so the rule has two copies:
+`apps/web/lib/sms` with `packages/shared/src/sms.ts`, and `services/worker/steps/sms_notice.py`
+with `steps/sms_text.py`. Change them together. `packages/shared/test/fixtures/sms-text.json` is
+run by both test suites and holds the two texts equal. `steps/dial.py` is the only module in the
+worker that calls the provider, and its send is the one call there that does not go through
+`steps/retry.py`.
+
 ## A blip on the wire is not a verdict on the request
 
 Every Supabase and GitHub call in `services/worker` goes through `steps/retry.py`: a dropped

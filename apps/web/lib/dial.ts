@@ -34,6 +34,9 @@ export type SmsResult =
 /** How long one call may take. A text that is not confirmed in this time is `unconfirmed`. */
 const TIMEOUT_MS = 10_000;
 
+/** A message id is a short token. Anything else is the provider's free text, and is not kept. */
+const MESSAGE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -99,13 +102,13 @@ export async function sendSms(
     // address, a proxy's page) must not erase a person's number as if the text had gone.
     const sent = isRecord(answer) && isRecord(answer.message) ? answer.message : null;
     if (!sent) return { state: "unconfirmed", reason: "unreadable_answer" };
-    return { state: "sent", id: typeof sent.id === "string" ? sent.id : null };
+    return { state: "sent", id: typeof sent.id === "string" && MESSAGE_ID.test(sent.id) ? sent.id : null };
   }
   const reason = reasonFor(response.status, answer);
-  // A 5xx says nothing about whether the message was queued.
-  if (response.status >= 500) return { state: "unconfirmed", reason };
-  // A redirect and every 4xx are "nothing was sent". A redirect, the key and the credit are not
-  // about this recipient.
+  // A 5xx says nothing about whether the message was queued, and a 303 says "done, see there".
+  if (response.status >= 500 || response.status === 303) return { state: "unconfirmed", reason };
+  // Every 4xx and every other redirect are "nothing was sent". A redirect, the key and the credit
+  // are not about this recipient.
   const forAll = response.status < 400 || response.status === 401 || response.status === 402;
   return { state: "refused", reason, forAll };
 }

@@ -9,6 +9,13 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  * this run and not from a guess.
  */
 
+/**
+ * Whole milliseconds since `start`, a value of `performance.now()`. That clock only goes forward.
+ * `Date.now()` follows the wall clock, and a host that corrects its clock during a test gave a
+ * time to first spotlight of -564 ms.
+ */
+const elapsedMs = (start: number): number => Math.round(performance.now() - start);
+
 const QUESTION = "Where do I change my seat?";
 // The booking NovaAir's demo data holds. The names and defaults are the ones scripts/ask-live.mjs
 // reads, so a host site with another booking is one pair of variables for both.
@@ -100,11 +107,11 @@ test("the widget walks a customer from Home to the seat map in three announced s
   const composer = page.getByRole("textbox").last();
   await composer.fill(QUESTION);
 
-  const asked = Date.now();
+  const asked = performance.now();
   await composer.press("Enter");
 
   const firstRing = await waitForSpotlight(page);
-  const timeToFirstSpotlight = Date.now() - asked;
+  const timeToFirstSpotlight = elapsedMs(asked);
 
   // The count is announced once, on the first step, and it is the whole route.
   await expect.poll(() => counter(page)).toBe(`Step 1 of ${ROUTE.length}`);
@@ -159,10 +166,10 @@ test("a question asked before answers from the product map without a model", asy
   await page.getByRole("button", { name: "Open support" }).click();
   const composer = page.getByRole("textbox").last();
   await composer.fill(QUESTION);
-  const asked = Date.now();
+  const asked = performance.now();
   await composer.press("Enter");
   const ring = await waitForSpotlight(page);
-  const elapsed = Date.now() - asked;
+  const elapsed = elapsedMs(asked);
   const target = await spotlitControl(page, ROUTE[2]!, ring);
   await expect(target).toBeVisible();
   expect(await counter(page)).toBe("Step 1 of 1");

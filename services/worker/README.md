@@ -52,6 +52,20 @@ the message. Everything else in the conventions still binds.
 When `SLACK_WEBHOOK_URL` is set, one message goes out when the issue is filed and one when the
 draft pull request opens.
 
+### The text notice
+
+When `DIAL_API_KEY` and `DIAL_FROM_NUMBER` are set, each person who agreed to a text about the gap
+gets it one time when the draft pull request opens. The rule is the web app's own
+(`apps/web/lib/sms`), copied in `steps/sms_notice.py`: claim the person with one conditional
+update on `gap_subscriber.notified_at`, send one time through `steps/dial.py`, then erase the
+number, or give the claim back when the provider refused. The send is the one call in the worker
+that does not go through `steps/retry.py`, because the provider's send call has no idempotency key
+and a second attempt can be a second text. The trace gets one `status` row before the pull request
+row: "Text notice: off" with the variable that is missing, "Text notice: no one asked for a text
+about this request", or "Text notice: 2 of 3 sent". A notice that fails never fails the run. A
+phone number is never in a trace row, a log line or an error. "The text notice" in section 4 of
+`docs/contracts.md` is the contract.
+
 Every step updates `escalation.status` and writes `trace_event` rows (source `workflow`) through
 PostgREST, so the console's Activity page shows the run live. A heartbeat writes a `status` trace
 event ("worker online") per project every 60 s.
@@ -79,6 +93,10 @@ steps/drafting.py  the draft / gate / repair / new-candidate loop
 steps/deploy.py    Vercel deployment polling by commit sha, with a clean 10 minute timeout
 steps/issue.py     issue and PR body builders
 steps/slack.py     optional webhook
+steps/sms_notice.py  the text notice: the one-text rule, the people in `gap_subscriber`, the trace row
+steps/sms_text.py  how a text is written; the worker's copy of `packages/shared/src/sms.ts`
+steps/dial.py      the text message provider: one send, one attempt
+steps/seal.py      opens what the dashboard stores encrypted (the GitHub token, a phone number)
 tests/             pytest suite and the fixture Next.js app
 ```
 
@@ -101,12 +119,15 @@ yourself (see `.env.example`).
 |---|---|---|
 | `OPENAI_API_KEY` | yes | OpenAI API key, used by every model call |
 | `SUPABASE_URL` | yes | `https://<ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | yes | service role key; the worker writes `escalation` and `trace_event`, and derives the key that decrypts a project's linked GitHub token |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | service role key; the worker writes `escalation` and `trace_event`, and derives the keys that open a project's linked GitHub token and the phone number of a person who asked for a text |
 | `GITHUB_TOKEN` | yes | fallback credential, used only for a project whose owner has not linked a GitHub account: fine-grained PAT with contents, issues and pull requests read-write on the target repository |
 | `VERCEL_TOKEN` | yes | token for the Vercel team that owns the target project |
 | `TARGET_VERCEL_PROJECT` | no (`novaair`) | Vercel project name whose deployment the worker waits for |
 | `TARGET_PRODUCTION_URL` | no | Stable address of that project's production deployments; blank reports each deployment's own URL |
 | `SLACK_WEBHOOK_URL` | no | post a message when an issue and a draft PR exist |
+| `DIAL_API_KEY` | no | Dial API key; with `DIAL_FROM_NUMBER` it turns on the text notice. Blank: off, and the trace says so |
+| `DIAL_FROM_NUMBER` | no | the Dial number that sends each text: E.164, its id, or its nickname |
+| `DIAL_API_URL` | no (`https://api.getdial.ai`) | the Dial API base |
 | `LANTERN_CACHE_DIR` | no (`~/.cache/lantern`) | where cached `node_modules` live |
 
 ### Starting a run by hand
