@@ -10,10 +10,15 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  */
 
 const QUESTION = "Where do I change my seat?";
+// The booking NovaAir's demo data holds. The names and defaults are the ones scripts/ask-live.mjs
+// reads, so a host site with another booking is one pair of variables for both.
+const BOOKING = process.env.NOVAAIR_BOOKING ?? "NVA7K2";
+const LAST_NAME = process.env.NOVAAIR_LAST_NAME ?? "Musk";
+const TRIP = `/trips/${BOOKING}`;
 const ROUTE = [
   { name: "My Booking", role: "link" as const, page: "/" },
   { name: "Find my booking", role: "button" as const, page: "/my-booking" },
-  { name: "Change seats", role: "link" as const, page: "/trips/NVA7K2" },
+  { name: "Change seats", role: "link" as const, page: TRIP },
 ];
 
 type Rect = { x: number; y: number; width: number; height: number };
@@ -74,13 +79,21 @@ test.beforeAll(async ({ request }) => {
   // In mock mode NovaAir runs in development mode and compiles each route on first use, which can
   // take longer than a step's wait. One request to the booking lookup warms it before the walk.
   if (!process.env.NOVAAIR_BASE_URL) {
-    await request.post("/api/reservations/lookup", { data: { code: "NVA7K2", lastName: "Dahake" } }).catch(() => undefined);
-    await request.get("/trips/NVA7K2").catch(() => undefined);
-    await request.get("/trips/NVA7K2/seats").catch(() => undefined);
+    await request.post("/api/reservations/lookup", { data: { code: BOOKING, lastName: LAST_NAME } }).catch(() => undefined);
+    await request.get(TRIP).catch(() => undefined);
+    await request.get(`${TRIP}/seats`).catch(() => undefined);
   }
 });
 
 test("the widget walks a customer from Home to the seat map in three announced steps", async ({ page }) => {
+  // A booking the host site cannot find stops the walk at step 2, and the only symptom there is a
+  // URL that never changes. Asked here, the same fault names its cause.
+  const lookup = await page.request.post("/api/reservations/lookup", { data: { code: BOOKING, lastName: LAST_NAME } });
+  expect(
+    lookup.ok(),
+    `the host site has no booking ${BOOKING} for the last name ${LAST_NAME} (HTTP ${lookup.status()}); set NOVAAIR_BOOKING and NOVAAIR_LAST_NAME`,
+  ).toBe(true);
+
   const stepsSeen: string[] = [];
   await page.goto("/");
   await page.getByRole("button", { name: "Open support" }).click();
@@ -106,8 +119,8 @@ test("the widget walks a customer from Home to the seat map in three announced s
     expect(await counter(page)).toBe(`Step ${index + 1} of ${ROUTE.length}`);
 
     if (step.name === "Find my booking") {
-      await page.getByLabel("Confirmation code").fill("NVA7K2");
-      await page.getByLabel("Last name").fill("Dahake");
+      await page.getByLabel("Confirmation code").fill(BOOKING);
+      await page.getByLabel("Last name").fill(LAST_NAME);
     }
     await target.click();
 
@@ -142,7 +155,7 @@ test("the widget walks a customer from Home to the seat map in three announced s
 test("a question asked before answers from the product map without a model", async ({ page }) => {
   // The first test taught the project this intent. The same question from the trip page should
   // spotlight at once; the budget below is the one the design commits to for a known route.
-  await page.goto("/trips/NVA7K2");
+  await page.goto(TRIP);
   await page.getByRole("button", { name: "Open support" }).click();
   const composer = page.getByRole("textbox").last();
   await composer.fill(QUESTION);
