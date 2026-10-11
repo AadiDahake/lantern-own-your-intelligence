@@ -1,14 +1,18 @@
 /**
- * Exploration as a job.
+ * Exploration as a job: the queue.
  *
  * A headless browser cannot run inside a serverless function, so the console's route only writes
  * a job row and answers. A process on a machine with a browser claims the row and does the work:
  * the forge runner (`npm run forge:runner`) or `npm run explore`. The console polls the row and
  * the graph tables, so it sees the pages appear as they are read.
+ *
+ * This module is every read and write of the job row and nothing else, because the route imports
+ * it and a function is deployed with all that its imports reach. The explorer is a type here and
+ * never a value: `./run-exploration` is the part that needs the browser, and
+ * `test/route-imports.test.ts` fails when anything under `app/` reaches it.
  */
 import { serviceClient } from "../supabase";
-import { emitTrace } from "../trace";
-import { exploreSite, type ExploreSummary } from "./explorer";
+import type { ExploreSummary } from "./explorer";
 
 export type ExploreJobStatus = "queued" | "running" | "done" | "failed";
 
@@ -88,48 +92,22 @@ export async function claimQueuedExploration(): Promise<ExploreJob | null> {
   return rows.length > 0 ? toJob(rows[0] as Record<string, unknown>) : null;
 }
 
-/** Runs a claimed job to the end and records how it went. Never throws: the row carries the error. */
-export async function runClaimedExploration(
-  job: ExploreJob,
-  log: (line: string) => void = () => undefined,
-): Promise<ExploreJob> {
-  const db = serviceClient();
-  try {
-    const summary = await exploreSite({ projectId: job.projectId, siteUrl: job.siteUrl, onProgress: log });
-    const { data } = await db
-      .from("site_explore_job")
-      .update({ status: "done", summary, error: null, finished_at: new Date().toISOString() })
-      .eq("id", job.id)
-      .select(COLUMNS)
-      .single();
-    void emitTrace({
-      projectId: job.projectId,
-      source: "agent",
-      kind: "tool",
-      title: "Explored the site",
-      detail: {
-        tool: "explorer",
-        transport: "shell",
-        args_summary: job.siteUrl,
-        result_summary: `${summary.pages} pages, ${summary.controls} controls, ${summary.transitions} transitions, ${summary.reveals} reveals`,
-        latencyMs: summary.durationMs,
-      },
-    });
-    return data ? toJob(data as Record<string, unknown>) : { ...job, status: "done", summary };
-  } catch (failure) {
-    const message = (failure as Error).message;
-    await db
-      .from("site_explore_job")
-      .update({ status: "failed", error: message, finished_at: new Date().toISOString() })
-      .eq("id", job.id);
-    void emitTrace({
-      projectId: job.projectId,
-      source: "agent",
-      kind: "error",
-      status: "failed",
-      title: "The site could not be explored",
-      detail: { message, siteUrl: job.siteUrl },
-    });
-    return { ...job, status: "failed", error: message };
-  }
+/** Records that a claimed job reached the end, with what the explorer found. */
+export async function finishExploration(job: ExploreJob, summary: ExploreSummary): Promise<ExploreJob> {
+  const { data } = await serviceClient()
+    .from("site_explore_job")
+    .update({ status: "done", summary, error: null, finished_at: new Date().toISOString() })
+    .eq("id", job.id)
+    .select(COLUMNS)
+    .single();
+  return data ? toJob(data as Record<string, unknown>) : { ...job, status: "done", summary };
+}
+
+/** Records that a claimed job stopped, with the reason the console shows on the row. */
+export async function failExploration(job: ExploreJob, message: string): Promise<ExploreJob> {
+  await serviceClient()
+    .from("site_explore_job")
+    .update({ status: "failed", error: message, finished_at: new Date().toISOString() })
+    .eq("id", job.id);
+  return { ...job, status: "failed", error: message };
 }

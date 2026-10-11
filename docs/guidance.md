@@ -173,8 +173,11 @@ Two sources feed it, through `supabase/migrations/0015_site_graph.sql`:
 
 - The explorer (`apps/web/lib/graph/explorer.ts`) runs where a browser can: the console's
   "Explore site" queues a job (`site_explore_job`), and the forge runner or `npm run explore`
-  on a machine of the team's carries it while the console polls. It drives a headless browser
-  with the same scanner code the widget uses (`packages/widget/src/scan/standalone.ts`, built to `scanner.js`). It reads
+  on a machine of the team's carries it while the console polls. The route imports the queue
+  (`lib/graph/jobs.ts`) and nothing that runs a job; `lib/graph/run-exploration.ts` is the one
+  module that joins the queue to the browser, so no function is deployed with Playwright in it.
+  The explorer drives a headless browser with the same scanner code the widget uses
+  (`packages/widget/src/scan/standalone.ts`, built to `scanner.js`). It reads
   every page from the site address, follows internal links, presses the controls that are not
   links on a fresh load of each page to see whether they navigate or reveal, and fills the forms
   it meets with values a small model suggests from the page's own text. Bounded: depth 3, 40

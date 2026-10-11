@@ -20,7 +20,8 @@ import {
   runClaimedRun,
   type ForgeQueueRow,
 } from "../lib/forge/queue";
-import { claimQueuedExploration, runClaimedExploration } from "../lib/graph/jobs";
+import { claimQueuedExploration } from "../lib/graph/jobs";
+import { runClaimedExploration } from "../lib/graph/run-exploration";
 
 const POLL_MS = 2_000;
 
