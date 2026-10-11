@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  agentSearch,
   appUrl,
   codexApiKey,
   escalationEngine,
@@ -81,5 +82,29 @@ describe("env", () => {
     });
     process.env.DIAL_API_URL = "http://localhost:8787//";
     expect(smsSender()).toMatchObject({ sender: { apiUrl: "http://localhost:8787" } });
+  });
+
+  it("keeps the agent search off until a key or the public switch turns it on, and names both", () => {
+    delete process.env.DARWIN_API_KEY;
+    delete process.env.LANTERN_DARWIN;
+    delete process.env.DARWIN_API_URL;
+    const off = { configured: false, reason: "DARWIN_API_KEY is not set and LANTERN_DARWIN is not 'public'" };
+    expect(agentSearch()).toEqual(off);
+    // A value of spaces is blank, and the switch has one word.
+    process.env.DARWIN_API_KEY = "   ";
+    process.env.LANTERN_DARWIN = "on";
+    expect(agentSearch()).toEqual(off);
+
+    process.env.LANTERN_DARWIN = "public";
+    expect(agentSearch()).toEqual({ configured: true, config: { apiKey: null, apiUrl: "https://api.darwin.so" } });
+
+    // A key wins over the switch, and is enough without it.
+    process.env.DARWIN_API_KEY = " test-key-not-real ";
+    expect(agentSearch()).toEqual({ configured: true, config: { apiKey: "test-key-not-real", apiUrl: "https://api.darwin.so" } });
+    delete process.env.LANTERN_DARWIN;
+    expect(agentSearch()).toMatchObject({ configured: true, config: { apiKey: "test-key-not-real" } });
+
+    process.env.DARWIN_API_URL = "http://localhost:8788//";
+    expect(agentSearch()).toMatchObject({ config: { apiUrl: "http://localhost:8788" } });
   });
 });

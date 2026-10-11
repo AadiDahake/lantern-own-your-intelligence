@@ -233,3 +233,24 @@ export function smsSender(): { configured: true; sender: SmsSender } | { configu
     sender: { apiKey, fromNumber, apiUrl: smsApiUrl() },
   };
 }
+
+export type AgentSearchConfig = { apiKey: string | null; apiUrl: string };
+
+/** The Darwin API base, with no slash at the end. */
+export const agentSearchApiUrl = (): string => optional("DARWIN_API_URL", "https://api.darwin.so").replace(/\/+$/, "");
+
+/**
+ * The agent search, Darwin: where a turn looks for a service outside the product when every check
+ * came back empty. It is on with `DARWIN_API_KEY`, or with `LANTERN_DARWIN=public` and no key
+ * (the search is public at a lower rate). It is off when both are blank, because a search sends
+ * the name of the missing capability to a different company, and a deployment must choose that.
+ * A key wins over the switch. A value of spaces is blank.
+ */
+export function agentSearch(): { configured: true; config: AgentSearchConfig } | { configured: false; reason: string } {
+  const apiKey = process.env.DARWIN_API_KEY?.trim();
+  if (apiKey) return { configured: true, config: { apiKey, apiUrl: agentSearchApiUrl() } };
+  if (process.env.LANTERN_DARWIN?.trim() === "public") {
+    return { configured: true, config: { apiKey: null, apiUrl: agentSearchApiUrl() } };
+  }
+  return { configured: false, reason: "DARWIN_API_KEY is not set and LANTERN_DARWIN is not 'public'" };
+}

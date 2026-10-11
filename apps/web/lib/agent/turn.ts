@@ -27,6 +27,7 @@ import type {
 import { chatJson, embed } from "../openai";
 import { serviceClient } from "../supabase";
 import { emitTrace } from "../trace";
+import { lookElsewhere, outsideTrace, type OutsideSearch } from "../alternatives/search";
 import {
   findKnownRoute,
   intentKey,
@@ -401,7 +402,30 @@ async function* knownRouteTurn(input: {
   return true;
 }
 
+/** The agent search of a turn, from its start until the turn reads it. */
+type OpenSearch = { current: { search: OutsideSearch; conversationId: string } | null };
+
 export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
+  const open: OpenSearch = { current: null };
+  try {
+    yield* turnEvents(input, open);
+  } finally {
+    // A turn that fails, and a reader that leaves, can end the turn after the agent search
+    // started and before the answer read it. The capability name did leave the product, so the
+    // search is stopped and recorded here. Nothing in this block waits.
+    const left = open.current?.search.abandon();
+    if (left && open.current) {
+      void emitTrace({
+        projectId: input.projectId,
+        conversationId: open.current.conversationId,
+        source: "agent",
+        ...outsideTrace(left),
+      }).catch(() => undefined);
+    }
+  }
+}
+
+async function* turnEvents(input: TurnInput, open: OpenSearch): AsyncGenerator<ChatEvent> {
   const db = serviceClient();
   const { projectId, question, page } = input;
 
@@ -644,6 +668,11 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
 
   // 8. Route on the evidence. Absence is confirmed by a reasoning model.
   let outcome = routeProbes(probes, input.thresholds);
+  // Every check came back empty. When the deployment turned the agent search on, it starts here
+  // and runs beside the verdict and the draft, so it costs the visitor no time. Only the name of
+  // the capability goes out. The result is read when the answer is ready, and not waited for.
+  const elsewhere = outcome === "absent" ? lookElsewhere(understanding.feature) : null;
+  if (elsewhere) open.current = { search: elsewhere, conversationId };
   let verdict: Verdict = {
     outcome,
     confidence: 0.8,
@@ -995,6 +1024,14 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
     void triggerDiscovery({ projectId, groupId: note.groupId, conversationId, trigger: "auto" });
   }
 
+  // A service outside the product is offered only for a confirmed absence, and only when the
+  // search has answered by now. A search that has not is stopped here.
+  const outside = elsewhere?.take(outcome === "absent") ?? null;
+  if (outside) {
+    void emitTrace({ projectId, conversationId, groupId: note.groupId, source: "agent", ...outsideTrace(outside) });
+  }
+  const alternatives = outside?.state === "done" ? outside.offered : [];
+
   yield {
     type: "answer",
     text,
@@ -1003,6 +1040,7 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
     noted: note.noted,
     ...(plan ? { plan } : {}),
     ...(sources.length ? { sources } : {}),
+    ...(alternatives.length ? { alternatives } : {}),
   };
 
   // The widget escalates against the assistant message, so hand its id back.

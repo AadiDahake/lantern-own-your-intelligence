@@ -477,6 +477,13 @@ export type PlanSource = "graph" | "cached" | "page" | "memory";
 export type PlanSummary = { source: PlanSource; total: number; destination?: { route: string; title: string } };
 export type AnswerSource = { title: string; url: string | null };
 
+// A service outside the product that lists the capability a visitor asked for. See "Outside services".
+export type Alternative = {
+  name: string;       // the capability as the service names it; it says the asked capability word for word
+  provider: string;   // who offers it
+  url: string;        // the listing's public page; https, built by the server from two ids
+};                    // no description: a stranger's sentences do not go under a company's name
+
 export type ProbeName = "docs" | "interface" | "repository";
 export type ProbeResult = {
   probe: ProbeName;
@@ -540,6 +547,7 @@ export type ChatEvent =
       plan?: PlanSummary;            // where the steps came from and the count, fixed for the walk
       sources?: AnswerSource[];      // the help articles the answer cites
       routeChanged?: boolean;        // a continuation changed the route, so the count changed
+      alternatives?: Alternative[];  // only with a verdict of absent; left out when no listing passed the gate
     }
   | { type: "error"; message: string };
 
@@ -614,6 +622,7 @@ Also exported:
   affordance ranking, so page-side ranking and server-side scoring always agree.
 - `MODELS` and `EFFORT`, the model ids and reasoning efforts in section 5, and
   `EMBED_DIMENSIONS` and `DEFAULT_VOICE` beside them.
+- `AGENT_SEARCH`, the path and the caps of the agent search in section 5.
 
 ## 3. HTTP API
 
@@ -701,6 +710,8 @@ The console renders these specially and falls back to a key/value list for anyth
 | `tool` (pipeline) | `{tool: "hogql", transport: "rest", args_summary, result_summary, sessions, matching_sessions, median_manual_actions, median_interactions, window_days, queries: [{name, rows, durationMs, cached}]}` |
 | `status` (text notice) | `{notice: "draft_sms", state: "off" \| "failed" \| "done", reason?, asked?, sent?, unconfirmed?, taken?, reasons?: string[]}`; `taken` counts the people a different run claimed at the same moment, and `reasons` are short codes (`rate_limited`, `http_400`, `timeout`, `unreachable`, `pass_limit`). Never a phone number and never the provider's own words |
 | `status` (text notice, later pass) | The same shape with `pass: "later"`, titled "Text notice, later pass: ...". The sweep of a runner writes it, into the trace of the run whose draft is open. One more state: `{notice: "draft_sms", pass: "later", state: "waiting", reason}` when the provider did not answer the read-only question, so nothing was sent; `reason` is a short code (`http_503`, `timeout`, `unreadable_answer`) |
+| `tool` (outside services) | `{tool: "agent_search", transport: "rest", args_summary, result_summary, search: "agents", state: "done" \| "late" \| "failed" \| "dropped" \| "abandoned", found?, named?, startable?, offered?: Alternative[], near?: [{name, provider, why}], reason?, latencyMs?, waitedMs?}`, titled "Outside services: ...". `args_summary` is the query that left the product, and it is the capability name. `near` names at most 3 listings that are named for the capability and were not offered, with the reason; a name that cannot be shown is left empty there. `reason` is a short code (`timeout`, `http_503`, `rate_limited`, `unreadable_answer`) and never the provider's own words |
+| `decision` (outside services) | `{search: "agents", state: "off" \| "skipped", reason}`, titled "Outside services: off" or "Outside services: not searched". Nothing was sent. Written only on a turn whose verdict is `absent`. Its kind is not `status`, for the reason in the next row |
 | `decision` (text offer) | `{notice: "draft_sms", offer: "on" \| "off", reason?}`, titled "Text notice: offered with the report" or "Text notice: not offered". One row for each answer that offers a report. Its kind is not `status`, because the console reads the newest `status` row as the worker's heartbeat |
 | `decision` "The user asked for this to be reported" | the feature request, `groupId`, the counts and the priority, and `textNotice: {state, reason?}` when the report asked for the text. Never a phone number |
 | `status` "worker online" | `{engine: "local" \| "forge", at, sms}`: a runner's heartbeat, one row for each project every 60 seconds. The worker writes it for `local` and the forge runner writes it for `forge`. `sms` is true when that runner has both text message variables, and the web app offers the text only from these rows |
@@ -841,6 +852,9 @@ group id. Two rows land on the conversation that triggered the run with `source:
      Draft the `FeatureRequest` with `MODELS.answer` and a JSON schema: an imperative title of at
      most 8 words, a description of two or three sentences, an area, `quote` set to the user's exact
      words (verified to be a substring of the user message, otherwise empty), and a rationale.
+     When the agent search is on, the answer can also carry `alternatives`: services outside the
+     product that list this capability and can start now. The words of the answer do not change.
+     See "Outside services".
 
    Persist the assistant message with its steps, probes, verdict and feature request. Emit `answer`.
 8. Every stage writes `trace_event` rows, which is what makes the console's Activity page show the
@@ -918,6 +932,90 @@ the run that owns the group when there is one, so a second reporter follows the 
 request rather than a run of their own. Under `local` the insert is the whole handover: the worker's
 runner polls for rows with `status = 'queued'` and `engine = 'local'` and reads the group off
 `escalation.group_id`.
+
+### Outside services
+
+When every check comes back empty, the product has nothing to show the visitor. A turn can then
+look in a public index of agents and services for one that already does the job, so the visitor
+has a way to go on today. `apps/web/lib/alternatives` is the rule, `apps/web/lib/darwin.ts` is the
+only module that calls the index, and the search is off unless the deployment turned it on
+(`DARWIN_API_KEY`, or `LANTERN_DARWIN=public`), because a search sends the name of the missing
+capability to a different company.
+
+**The search never costs the visitor time.** It starts when `routeProbes` says `absent`, and it
+runs beside the verdict and the drafted request, which the turn waits for in each case. When the
+answer is ready the turn reads the search one time (`take`) and does not wait: a search that has
+not answered is stopped, and the answer goes out with no `alternatives`. A search has 8 seconds
+at most (`AGENT_SEARCH.timeoutMs`). No outcome of the search can fail the turn. A turn that fails,
+or whose reader leaves, after the search started ends the search too (`abandon`), and the trace
+says so.
+
+**The capability name leaves the product whole, or not at all** (`queryFor`). The query is the
+`feature` from the reading of the message, never the message and never the page. A name with one
+word taken out says a different thing ("enabling 2FA login" is not "enabling login"), so one word
+that can be private stops the search:
+
+| The name is not sent when a word | Because it can be |
+|---|---|
+| has a digit, a mark, a dot, or a letter that is not one of the 26 | a booking code, a phone number, an email, an address |
+| starts with a capital and is not the first word, or is the first word and does not end in "ing" | a person, a place, a brand |
+| is in capitals and longer than 4 letters, or has 4 letters or more and no vowel | a code |
+
+A name of fewer than 2 words (articles do not count), of more than 8 words, or of more than 120
+characters is not sent either. A short word in capitals ("SMS", "CSV") is a plain word.
+
+**An offer is made only for a confirmed absence, and a listing must pass each rule** (`gate`). An
+offer points a person at a service that nobody at the company has tried, so a wrong one costs more
+than no offer. The index itself is no filter: it answered a query of three nonsense words with a
+full page of listings, each one from a verified service.
+
+| Rule | What it reads | Why |
+|---|---|---|
+| It is named for the capability | `sameName`: the listing's own name and the capability name have the same words in the same order. Only an article and a word such as "my" are left out, word endings are taken off ("setting" and "set", "codes" and "code"), and no synonym is joined. The description is never read | Words that only look alike are not enough. "Export customer contacts" has each noun of "importing customer contacts", "Book a flight" has each noun of "canceling a flight booking", and "Turn off notifications" differs from "turning on notifications" by one small word. The product's own rule for a control (`coversCapability`) lets one concept differ and joins synonyms, which is right for the labels of one product |
+| It can start now | The index says `readiness: "ready"` and `canStartThread: true` | The public page of a listing that is not ready tells a person that it cannot start. `authentication_required` is not "now" |
+| It needs no payment | `executionRequirements.payment.state` is not `REQUIRED` | A route that costs money is not what the offer says |
+| The service is known | The index says `verified: true` | The offer stands under a company's name |
+| Both names can be shown | `shownName` and `shownService`: letters, digits and a few marks of the plain set, no dot between letters, no `//`, fewer than 7 digits; a service name has at most 40 characters and 5 words and at least 2 letters | A name can carry an address or a phone number, a letter of a different script can look like a different letter, and some characters show as nothing |
+| One for one service, 2 in total | The index's own order is kept; a service is its name | A short list is read; a long one is not |
+
+**Nothing from outside is trusted.** Each listing is read into a checked shape, and its words lose
+each control, invisible and direction character and are cut. An offer has two names and a link,
+and no sentence of the listing. The link is never taken from the answer: it is built from the two
+ids of the listing, which must have a fixed form, on the index's own host. A redirect is not
+followed, the answer is read up to 512 kB, and a `200` that is not the index's own shape is a
+failure and not "no service".
+
+**The trace says what happened**, in one row for each search that started and for each turn that
+would have offered one (the shapes are in section 3):
+
+| State | Title | When |
+|---|---|---|
+| `off` | "Outside services: off" | The verdict is `absent` and the search is not configured. Nothing was sent |
+| `skipped` | "Outside services: not searched" | The verdict is `absent` and the capability name must not leave the product. Nothing was sent |
+| `done` | "Outside services: 1 offered of 7 found", "... none offered of 7 found", "... none found" | The index answered in time. The row counts the listings found, the ones that are named for the capability and the ones that can start, and it names up to 3 that are named for it and were not offered, with the reason |
+| `late` | "Outside services: no answer in time" | The answer was ready first, so the search was stopped |
+| `failed` | "Outside services: the search failed" | No usable answer, with a short reason code |
+| `dropped` | "Outside services: not needed, the absence was not confirmed" | The three checks were empty and the verdict then said `hedge`. The capability name did go out; nothing is offered |
+| `abandoned` | "Outside services: the turn ended before the result was read" | The turn failed, or its reader left, after the search started. The capability name did go out |
+
+What is not built, and what is known:
+
+- The widget does not show `alternatives` yet. Until it does, the row in the console's Activity
+  page is where the result can be read.
+- On 2026-10-11 each of 110 listings in 26 answers of the public index had `readiness:
+  "unavailable"`. So a visitor is offered nothing today, and the `done` row names the listings
+  that are named for the capability and cannot start. The gate needs no change when the index
+  marks a listing as ready.
+- A service outside the product cannot work with the visitor's data in the product (a booking, an
+  account) unless it says so. The gate cannot know this. The words that the widget puts next to
+  an offer must say that the service is a different company's.
+- The name rule refuses most listings that do the job under a different name ("Weather forecast"
+  for "checking the weather forecast"). That is the side on which it is meant to be wrong.
+- The query rule cannot know a name or a code that is written as plain small words ("john
+  smith").
+- `shownService` cannot know that a service name copies the company's own.
+- The switch is for the whole deployment, not for one project.
+- In a call, the answer is spoken from its words, which do not name an alternative.
 
 ### The text notice
 
@@ -1249,6 +1347,28 @@ Chosen on **2026-10-11** by reading <https://docs.getdial.ai> and the OpenAPI do
 | What counts as sent | a 2xx with `{message: {...}}` in the body | A 200 from a different server must not erase a person's number as if the text had gone. `message.id` is kept when it is a string, and is not required. |
 | Error reason | the provider's `code` when it is a lower-case word (`insufficient_credit`, `rate_limited`), else `http_<status>` | The provider's error text can quote the phone number, so it is never copied. |
 
+### Agent search
+
+The provider is Darwin, a search engine for agents. `AGENT_SEARCH` in `@lantern/shared` holds the
+path and the caps, `apps/web/lib/darwin.ts` is the only module that calls it, and the base address
+is `DARWIN_API_URL`. Nothing else names an endpoint. `npm run darwin:live` runs the product's own
+client and gate against it.
+
+Chosen on **2026-10-11** by reading <https://darwin.so/docs> and the OpenAPI document it links,
+and by calls to the public endpoint with no key. The numbers in the table are from those calls.
+
+| What | Value | Why |
+|---|---|---|
+| Search | `POST /api/v2/search`, JSON `{query, numResults}`; `200 {results: [{rank, agent, capability, name, description, readiness, canStartThread}], agents: [{agent, name, verified}]}` | The OpenAPI document and the SDK describe v2. The guide pages describe `/api/v3/search`, which also works with no key. Measured one call at a time: v2 answered in 0.5 to 10.8 s (median 2.3 s) with no failure in 7 calls; v3 answered in 3.3 to 7.7 s (median 4.5 s) and gave `500` on 1 call of 7. Of 17 calls to each version in total, 8 of them at one time, v2 failed 1 time (a `503`) and v3 failed 5 times. A turn gives the search only the time of its own work, so the faster and steadier version is used. v3 ranks better and gives its reasons; the gate does the ranking's work here |
+| Key | none in public mode; `x-api-key: <key>` with `DARWIN_API_KEY` | The search is public at 100 requests each minute, and 5000 with a key. `fetch` does not remove a header of this name when a redirect goes to a different host, so a redirect is never followed (`redirect: "manual"`), and a `3xx` is a failure |
+| `numResults` | 10 | The answer holds more rows than this number (11 to 14 were seen), so at most 50 are read |
+| Time limit | 8 s, and one attempt | The provider asks for a bounded retry after a `503` or a `429`. A turn has no time for one |
+| Link of a listing | `https://index.darwin.so/agent/<agent>?capability=<capability>`, built by the client | The v2 answer has no link for a person: `agents[].websiteUrl` is the address of a machine endpoint. This form is the "Agent page" line of a v3 `connectionPrompt`. It answered `200` for the two kinds of id that were tried (one of them has a `:`, which the client encodes), and `404` for an unknown id |
+| What counts as "can start" | `readiness: "ready"` and `canStartThread: true` | The provider's guide: "Do not turn a descriptive listing into a promise that work can start." |
+| What counts as "needs a payment" | `executionRequirements.payment.state: "REQUIRED"` | The field is in 22 of 86 results that were read, and none of them said `REQUIRED`. No listing was ready, so the rule has no real case yet |
+| Relevance | none is taken from the answer | `outcome` was `MATCH` for each answer, also for a query of nonsense words, and each agent was `verified: true`. So the gate compares names itself |
+| SDK | not used | The call is one POST, and the SDK and the docs disagree on the arguments |
+
 
 ## 6. Capability IR
 
@@ -1320,4 +1440,7 @@ where the store keeps one JSON file per project (default the OS temp dir). Text 
 `DIAL_API_URL` is the API base (default `https://api.getdial.ai`). The worker reads the same three
 names from its own environment (`services/worker/config.py`). Only the runner that sends needs
 them: the worker under `local`, the forge runner under `forge`. Its heartbeat tells the web app
-that the text can be offered, and the web app reads neither variable for the offer.
+that the text can be offered, and the web app reads neither variable for the offer. The agent
+search: `DARWIN_API_KEY` turns it on with a key, `LANTERN_DARWIN=public` turns it on with no key,
+and it is off when both are blank; `DARWIN_API_URL` is the API base (default
+`https://api.darwin.so`). Only the web app reads them.

@@ -196,6 +196,21 @@ export type PlanSummary = {
 /** A help article the answer cites. */
 export type AnswerSource = { title: string; url: string | null };
 
+/**
+ * A service outside this product that lists the capability the visitor asked for, from the agent
+ * search (`AGENT_SEARCH`). It is a listing in a public index and not a part of the product: the
+ * two names are the service's own, and nobody at the company has tried it. It carries no
+ * description, because a stranger's sentences do not go under a company's name.
+ */
+export type Alternative = {
+  /** The capability as the service names it. It says the capability that was asked for, word for word. */
+  name: string;
+  /** Who offers it. */
+  provider: string;
+  /** The listing's public page. Always `https`, and always built by the server from two ids. */
+  url: string;
+};
+
 /** `/api/chat` server-sent events, in order of emission. */
 export type ChatEvent =
   | { type: "conversation"; conversationId: string; messageId: string }
@@ -223,6 +238,11 @@ export type ChatEvent =
       sources?: AnswerSource[];
       /** A continuation had to change the route, so the count the user saw is no longer true. */
       routeChanged?: boolean;
+      /**
+       * Services outside the product that say they do this now. Only with a verdict of `absent`,
+       * and only the ones that passed every rule of the gate; left out when there is none.
+       */
+      alternatives?: Alternative[];
     }
   | { type: "error"; message: string };
 

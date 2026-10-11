@@ -244,6 +244,26 @@ and holds the two copies of the rule equal; add a scenario there when you change
 order of the tries, or a row. The query, the question and the timers have their own tests in
 each suite.
 
+## A service outside the product is offered only when it can start
+
+When every check comes back empty, a turn can look in a public index for a service that already
+does the job (`apps/web/lib/alternatives`, "Outside services" in section 4 of
+`docs/contracts.md`). It is off unless the deployment turns it on. Three rules hold for anything
+added to it:
+
+- The search never costs the visitor time. It runs beside the verdict and the draft, the turn
+  reads it one time when the answer is ready, and a search that has not answered is stopped.
+  Never await it, and never start it for a question that a check answered.
+- The capability name leaves the product whole or not at all, through `queryFor`: never the
+  message, never the page, never an id, and never a name with a word taken out.
+- An offer stands under a company's name and points at a service that nobody there has tried, so
+  `gate` is strict on purpose. The listing must be named for the capability word for word
+  (`sameName`; do not use `coversCapability` here, it lets one concept differ and joins
+  synonyms), the index must say that it can start now with no payment, and the service must be
+  verified. An offer is two names and a link: no sentence of a listing is shown, and the link is
+  built from two ids and never taken from the answer. `apps/web/lib/darwin.ts` is the only module
+  that calls the index.
+
 ## A blip on the wire is not a verdict on the request
 
 Every Supabase and GitHub call in `services/worker` goes through `steps/retry.py`: a dropped
@@ -355,6 +375,7 @@ npm run discover:runner -- --once     # drain the discovery queue; --model codex
 LANTERN_CONSOLE_TOKEN=... npm run tail   # the evidence loop as a board in the terminal
 npm run ask:live -- "<question>" [home|trip|seats]   # the live site, answered by this working tree
 npm run dial:live    # the text message provider: the key and the sender number, read-only; --send <number> sends one text
+LANTERN_DARWIN=public npm run darwin:live -- "<capability>"   # the agent search with no key: what the index returns and what the gate offers
 ```
 
 Screenshots come from `scripts/screenshots.mjs` (Playwright, one private browser per run), never

@@ -30,7 +30,8 @@
     "ask:live": "node scripts/ask-live.mjs",
     "eval:docs": "tsx --tsconfig apps/web/tsconfig.json scripts/eval-docs.ts",
     "explore": "tsx --tsconfig apps/web/tsconfig.json scripts/explore.ts",
-    "dial:live": "tsx --tsconfig apps/web/tsconfig.json scripts/dial-live.ts"
+    "dial:live": "tsx --tsconfig apps/web/tsconfig.json scripts/dial-live.ts",
+    "darwin:live": "tsx --tsconfig apps/web/tsconfig.json scripts/darwin-live.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
