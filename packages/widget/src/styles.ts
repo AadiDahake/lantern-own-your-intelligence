@@ -31,6 +31,8 @@ const SHEET = `
   --pl-shadow: 0 28px 74px rgba(23, 32, 28, 0.24), 0 2px 10px rgba(23, 32, 28, 0.08);
   --pl-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 0 0 1px rgba(255, 255, 255, 0.28);
   --pl-scrim: rgba(14, 18, 16, 0.42);
+  /* An input that is wrong, and the sentence that says why. */
+  --pl-danger: #a3231c;
   --pl-blur: blur(32px) saturate(170%);
   --pl-serif: ui-serif, Georgia, "Times New Roman", serif;
 
@@ -59,6 +61,7 @@ const SHEET = `
   --pl-shadow: 0 28px 74px rgba(0, 0, 0, 0.5), 0 2px 10px rgba(0, 0, 0, 0.35);
   --pl-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   --pl-scrim: rgba(4, 6, 5, 0.55);
+  --pl-danger: #ffb4ab;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -249,6 +252,31 @@ const SHEET = `
 .pl-card__label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--pl-muted); }
 .pl-card__actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pl-card__note { color: var(--pl-muted); font-size: 12.5px; }
+
+/* The report, and the optional text about it */
+.pl-report { display: flex; flex-direction: column; gap: 10px; }
+.pl-notify { display: flex; flex-direction: column; gap: 8px; }
+.pl-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; cursor: pointer; }
+.pl-check input { width: 15px; height: 15px; margin: 1.5px 0 0; flex: none; accent-color: var(--pl-accent); cursor: pointer; }
+.pl-check input:focus-visible { outline: 2px solid var(--pl-accent); outline-offset: 2px; }
+.pl-check input:disabled, .pl-check:has(input:disabled) { cursor: default; }
+.pl-input {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  font-size: 14px;
+  color: var(--pl-ink);
+  background: var(--pl-field);
+  border: 1px solid var(--pl-hairline);
+  border-radius: 10px;
+  padding: 7px 10px;
+}
+.pl-input::placeholder { color: var(--pl-muted); }
+.pl-input:focus-visible { outline: 2px solid var(--pl-accent); outline-offset: 1px; }
+.pl-input[aria-invalid="true"] { border-color: var(--pl-danger); }
+.pl-input:disabled { opacity: 0.55; }
+.pl-card .pl-notify__hint { color: var(--pl-muted); font-size: 12px; line-height: 1.45; }
+.pl-card .pl-notify__error { color: var(--pl-danger); font-size: 12px; line-height: 1.45; }
 
 .pl-btn {
   appearance: none;

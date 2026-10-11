@@ -45,7 +45,13 @@ vi.mock("@/lib/openai", () => ({
   embed: async (inputs: string[]) => inputs.map(() => new Array(1536).fill(0)),
 }));
 
-vi.mock("@/lib/trace", () => ({ emitTrace: async () => undefined }));
+/** The trace rows the turn wrote, by title. */
+const traced: { title: string; detail: unknown }[] = [];
+vi.mock("@/lib/trace", () => ({
+  emitTrace: async (input: { title: string; detail: unknown }) => {
+    traced.push({ title: input.title, detail: input.detail });
+  },
+}));
 
 class FakeQuery {
   constructor(private readonly table: string) {}
@@ -120,8 +126,21 @@ vi.mock("@/lib/agent/memory", () => ({
 
 vi.mock("@/lib/agent/summary", () => ({ closeConversation: async () => "solved" }));
 
+/** The state of the gap that the note joined. */
+let noteStatus: string | null = "observed";
 vi.mock("@/lib/agent/requests", () => ({
-  noteRequest: async () => ({ noted: true, groupId: "group-1" }),
+  noteRequest: async () => ({ noted: true, groupId: "group-1", status: noteStatus }),
+}));
+
+/** What the process that sends the one text says. Off is the state of a deployment with no provider. */
+let textOffer: { on: true } | { on: false; reason: string } = { on: false, reason: "DIAL_API_KEY is not set" };
+const offerAsks: string[] = [];
+vi.mock("@/lib/sms/offer", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sms/offer")>()),
+  textOffer: async (projectId: string) => {
+    offerAsks.push(projectId);
+    return textOffer;
+  },
 }));
 
 /** The opportunity pipeline the absence path enqueues, kept off this turn and out of the network. */
@@ -214,6 +233,10 @@ beforeEach(() => {
   remembered = null;
   graph = NOVAAIR_GRAPH;
   discoveries.length = 0;
+  traced.length = 0;
+  noteStatus = "observed";
+  textOffer = { on: false, reason: "DIAL_API_KEY is not set" };
+  offerAsks.length = 0;
 });
 
 describe('"Hello, can you hear me?"', () => {
@@ -457,6 +480,81 @@ describe("a capability the product does not have", () => {
     const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP, null));
     expect(answer?.text).not.toContain("report");
     expect(answer?.escalation).toMatchObject({ offered: false });
+  });
+});
+
+describe("the one text that the report can offer", () => {
+  const textRows = () => traced.filter((row) => row.title.startsWith("Text notice"));
+
+  beforeEach(() => {
+    chunks = [CHILDREN_PASSAGE];
+    answers = {
+      understanding: { intent: "product", feature: "finding seats together" },
+      passage_read: { covers: false, reason: "it says to move one passenger at a time" },
+      verdict: { exists: false, confidence: 0.9, reasoning: "no control and no passage says it can be done" },
+      feature_request: {
+        title: "Find seats together for a party",
+        description: "Let a family take three seats side by side in one move.",
+        area: "seats",
+        quote: "Can you find us three seats together?",
+        rationale: "Today they rebook one passenger at a time.",
+      },
+    };
+  });
+
+  it("is not in the offer when text messages are off, and the trace says that the part is off", async () => {
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer?.escalation).toMatchObject({ offered: true });
+    expect(answer?.escalation).not.toHaveProperty("textNotice");
+    expect(textRows()).toEqual([
+      { title: "Text notice: not offered", detail: { notice: "draft_sms", offer: "off", reason: "DIAL_API_KEY is not set" } },
+    ]);
+  });
+
+  it("is in the offer when the sender says that it can text", async () => {
+    textOffer = { on: true };
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer?.escalation).toMatchObject({ offered: true, textNotice: true });
+    expect(offerAsks).toEqual(["project-1"]);
+    expect(textRows().map((row) => row.title)).toEqual(["Text notice: offered with the report"]);
+  });
+
+  it.each(["pr_open", "awaiting_approval", "shipped", "rejected"])(
+    "is not offered for a gap that is already %s, because no text would come",
+    async (status) => {
+      textOffer = { on: true };
+      noteStatus = status;
+      const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+      expect(answer?.escalation).toMatchObject({ offered: true });
+      expect(answer?.escalation).not.toHaveProperty("textNotice");
+      expect(textRows()).toEqual([
+        { title: "Text notice: not offered", detail: { notice: "draft_sms", offer: "off", reason: `the gap is ${status}` } },
+      ]);
+    },
+  );
+
+  it("is still offered when the note could not be made, because the route checks the gap again", async () => {
+    textOffer = { on: true };
+    noteStatus = null;
+    expect(answerOf(await stream(SEATS_TOGETHER, SEAT_MAP))?.escalation).toMatchObject({ textNotice: true });
+  });
+
+  it("is not asked about when there is no repository to file against", async () => {
+    textOffer = { on: true };
+    projectRow = { id: "project-1", repo_full_name: null };
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP, null));
+    expect(answer?.escalation).toEqual({ offered: false, reason: "no_repository" });
+    expect(offerAsks).toEqual([]);
+    expect(textRows()).toEqual([]);
+  });
+
+  it("is not asked about on a turn that offers no report", async () => {
+    textOffer = { on: true };
+    answers = { understanding: { intent: "chat", feature: "" }, chat_answer: { answer: "Yes, I can hear you." } };
+    const answer = answerOf(await stream("Hello, can you hear me?"));
+    expect(answer?.escalation).toEqual({ offered: false });
+    expect(offerAsks).toEqual([]);
+    expect(textRows()).toEqual([]);
   });
 });
 

@@ -5,6 +5,7 @@ import responses
 
 from models import Approval, Draft, FeatureRequestInput, GateOutcome, IssueRef, Plan, PlannedFile, PrRef
 from steps import db, deploy, mcp_github, pipeline, slack, sms_notice
+from steps.github import GitHubError
 from steps.sms_notice import NoticeOutcome
 
 API = "https://api.github.com/repos/AadiDahake/novaair-own-your-intelligence"
@@ -134,6 +135,44 @@ def test_the_people_who_asked_are_texted_once_the_pull_request_is_open(
     assert order == ["group pr_open", "notice p1 g1", "group awaiting_approval"]
     assert ("status", "failed", "Text notice: 2 of 3 sent") in rows
     assert [title for _kind, _status, title in rows][-2:] == ["Opened draft pull request #31", pipeline.PAUSE_LABEL]
+
+
+@responses.activate
+@pytest.mark.parametrize("broken", ["the comment on the pull request", "the write of the gap's state"])
+def test_the_people_are_texted_one_time_when_a_step_after_the_pull_request_fails(
+    req: FeatureRequestInput, rows: list[tuple[str, str, str]], monkeypatch: pytest.MonkeyPatch, broken: str
+) -> None:
+    """The pull request is open, so the text is owed. A refused comment must not cost each person their text."""
+    _github_takes_a_draft_pr(monkeypatch)
+    order: list[str] = []
+
+    def update_group(_id: str, **fields: object) -> None:
+        order.append(f"group {fields.get('status')}")
+        if broken == "the write of the gap's state":
+            raise RuntimeError("PostgREST 503: not now")
+
+    def comment(*_args: object, **_kwargs: object) -> None:
+        order.append("comment")
+        raise GitHubError("403 Resource not accessible by integration")
+
+    def notice(project_id: str, group_id: str) -> NoticeOutcome:
+        order.append(f"notice {project_id} {group_id}")
+        return NoticeOutcome("done", asked=1, sent=1)
+
+    monkeypatch.setattr(db, "update_group", update_group)
+    monkeypatch.setattr(pipeline.GitHubClient, "comment", comment)
+    monkeypatch.setattr(sms_notice, "draft_notice", notice)
+    grouped = req.model_copy(update={"group_id": "g1"})
+
+    with pytest.raises((GitHubError, RuntimeError)):
+        pipeline.open_draft_pr(grouped, IssueRef(number=7, url="u", title="t"), _plan(), _draft())
+
+    # One notice, after the gap's state was written or tried, and the failure still reaches `fail`.
+    assert order.count("notice p1 g1") == 1
+    assert order[0] == "group pr_open"
+    assert order[-1] == "notice p1 g1"
+    assert "group awaiting_approval" not in order
+    assert ("status", "ok", "Text notice: 1 of 1 sent") in rows
 
 
 @responses.activate

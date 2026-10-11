@@ -224,7 +224,8 @@ function coerceSources(value: unknown): AnswerSource[] {
 function toEscalationOffer(value: unknown): EscalationOffer {
   if (!isRecord(value)) return { offered: false };
   if (value.offered === true && isRecord(value.request)) {
-    return { offered: true, request: value.request as FeatureRequest };
+    const request = value.request as FeatureRequest;
+    return value.textNotice === true ? { offered: true, request, textNotice: true } : { offered: true, request };
   }
   return value.reason === 'no_repository' ? { offered: false, reason: 'no_repository' } : { offered: false };
 }

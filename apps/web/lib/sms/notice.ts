@@ -19,8 +19,11 @@
  * - One pass texts at most `PASS_LIMIT` people and takes at most `PASS_BUDGET_MS`, so the run
  *   that waits for it is never held for long.
  *
- * Nothing starts a second pass by itself. A person who is still owed after a pass gets the text
- * when a later draft pull request opens for the same gap.
+ * Nothing starts a second pass. A gap gets one draft pull request (`actionFor` in
+ * `lib/agent/requests.ts` starts no second one), so a person who is still owed after the pass (a
+ * refusal, a pass that stopped, the time budget) gets no text, and the sealed number stays
+ * stored. This is a known limit; a sweep that texts owed people while the draft is open is the
+ * fix, and it is not built.
  *
  * A phone number is never in an outcome, a reason, or a trace row.
  */

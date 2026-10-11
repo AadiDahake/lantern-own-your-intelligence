@@ -130,6 +130,30 @@ export type EscalateRequest = {
   conversationId?: string;
   messageId: string;
   visitorId?: string;
+  /**
+   * Present only when the person asked for the one text about this gap and agreed to it. `phone`
+   * is the number with its country code. A request with `notify` and no `consent: true` is
+   * refused, and nothing is stored.
+   */
+  notify?: { phone: string; consent: true };
+};
+
+/**
+ * What became of a request for the one text about a gap.
+ *
+ * `subscribed`: the number is stored and one text is owed. `not_needed`: a change for the gap was
+ * drafted already, so no text will come. `unavailable`: the text cannot be set up now. In the last
+ * two cases the number was not stored.
+ */
+export type TextNoticeState = "subscribed" | "not_needed" | "unavailable";
+
+/** Answer of `POST /api/escalate`. */
+export type EscalateResponse = {
+  escalationId: string;
+  groupId: string;
+  status: "queued";
+  /** Present only when the request carried `notify`. */
+  notify?: TextNoticeState;
 };
 
 /** How a visitor rated one answer in the widget. */
@@ -148,9 +172,12 @@ export type FeedbackRequest = {
  *
  * `reason` says why it could not: today the only one is a project with no repository bound, which
  * the widget explains rather than offering a button that cannot work.
+ *
+ * `textNotice` is there only when the process that sends the one text says that it can, and the
+ * gap has no drafted change yet. The widget shows the phone field only then.
  */
 export type EscalationOffer =
-  | { offered: true; request: FeatureRequest }
+  | { offered: true; request: FeatureRequest; textNotice?: true }
   | { offered: false; reason?: "no_repository" };
 
 /**

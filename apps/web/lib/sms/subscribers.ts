@@ -20,7 +20,7 @@ const QUERY_TIMEOUT_MS = 10_000;
  * A claim is held for one send and one write, which is seconds. A claim older than this with a
  * number still stored is what a stopped run left behind.
  */
-const STALE_CLAIM_MS = 15 * 60_000;
+export const STALE_CLAIM_MS = 15 * 60_000;
 
 const limit = (): AbortSignal => AbortSignal.timeout(QUERY_TIMEOUT_MS);
 

@@ -24,10 +24,7 @@ export const SMS = {
   titleChars: 80,
 } as const;
 
-/** A phone number in E.164 form: a plus sign, then 7 to 15 digits, and the first is not 0. */
-export function isE164(value: string): boolean {
-  return /^\+[1-9]\d{6,14}$/.test(value);
-}
+export { isE164, toE164 } from "./phone";
 
 /** Characters that have a plain replacement. */
 const REPLACED: ReadonlyMap<string, string> = new Map([

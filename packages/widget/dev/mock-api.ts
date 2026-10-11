@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
-import { controlKey, controlRefOf, planRoute, routeOf, sameControl } from '@lantern/shared';
+import { controlKey, controlRefOf, planRoute, routeOf, sameControl, toE164 } from '@lantern/shared';
 import type { PageContext, Step } from '@lantern/shared';
 import { CONTROLS, NOVAAIR_GRAPH } from '../../shared/test/fixtures/novaair-graph';
 
@@ -170,6 +170,8 @@ async function chat(request: IncomingMessage, response: ServerResponse): Promise
       steps: null,
       escalation: {
         offered: true,
+        // The mock stands for a server that can send the one text, so the card asks for a number.
+        textNotice: true,
         request: {
           title: 'Add automatic family seat selection',
           description: 'Find a block of adjacent seats for every passenger on the reservation and assign them in one step, with a preview before the change is saved.',
@@ -304,13 +306,29 @@ const STATUS_FLOW = [
 const escalations = new Map<string, Escalation>();
 
 async function escalate(request: IncomingMessage, response: ServerResponse): Promise<void> {
-  await readJson(request);
+  const body = await readJson(request);
+  // The same two refusals as the real route: no number is taken without consent, and a number
+  // that cannot be dialled is not a report with no text.
+  const notify = body.notify as { phone?: unknown; consent?: unknown } | null | undefined;
+  const asked = notify !== undefined && notify !== null;
+  const refusal = !asked
+    ? null
+    : notify.consent !== true
+      ? 'consent_required'
+      : typeof notify.phone === 'string' && toE164(notify.phone)
+        ? null
+        : 'invalid_phone';
+  if (refusal) {
+    response.writeHead(400, { ...CORS, 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: refusal, reason: refusal }));
+    return;
+  }
   const id = randomUUID();
   const record: Escalation = { id, status: 'queued', createdAt: new Date().toISOString() };
   escalations.set(id, record);
   advance(record, 0);
   response.writeHead(200, { ...CORS, 'content-type': 'application/json' });
-  response.end(JSON.stringify({ escalationId: id, status: record.status }));
+  response.end(JSON.stringify({ escalationId: id, status: record.status, ...(asked ? { notify: 'subscribed' } : {}) }));
 }
 
 /** Walks the report through the real status list, four seconds per step. */

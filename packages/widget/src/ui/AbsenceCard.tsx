@@ -1,11 +1,23 @@
+import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import { AnswerActions } from './AnswerActions';
 import { useReveal } from './reveal';
+import {
+  NOTICE_COPY,
+  NOTICE_ERROR,
+  NOTICE_FIELD_LABEL,
+  NOTICE_HINT,
+  NOTICE_LABEL,
+  NOTICE_PLACEHOLDER,
+  noticeStands,
+  readNotice,
+} from './textNotice';
 import type {
   EscalationStatus,
   EscalationView,
   FeatureRequest,
   FeedbackRating,
   ReportBlock,
+  TextNoticeState,
 } from '../types';
 
 /** Why the offer could not be taken up. This is what the user reads, so it says who is missing what. */
@@ -25,6 +37,8 @@ export function AbsenceCard({
   reporting,
   blocked,
   noted,
+  textNotice,
+  notice,
   elapsedSeconds,
   rating,
   canRate,
@@ -39,10 +53,15 @@ export function AbsenceCard({
   blocked?: ReportBlock;
   /** The agent already recorded the gap, whether or not the user takes up the offer. */
   noted?: boolean;
+  /** The server can send the one text about this gap, so the card can ask for a number. */
+  textNotice?: boolean;
+  /** What became of the request for that text, once the report was sent. */
+  notice?: TextNoticeState;
   elapsedSeconds: number;
   rating?: FeedbackRating;
   canRate: boolean;
-  onReport: () => void;
+  /** `phone` is in E.164 form, and it is there only when the person asked for the text. */
+  onReport: (phone?: string) => void;
   onRate: (rating: FeedbackRating) => void;
 }) {
   const shown = useReveal(text);
@@ -52,20 +71,117 @@ export function AbsenceCard({
     <div class="pl-card">
       <p>{shown}</p>
       {settled && !escalation && !blocked && request && (
-        <div class="pl-card__actions">
-          <button type="button" class="pl-btn pl-btn--accent" onClick={onReport} disabled={reporting}>
-            {reporting ? 'Reporting' : 'Report to developers'}
-          </button>
-          <span class="pl-card__label">{request.title}</span>
-        </div>
+        <ReportForm request={request} reporting={reporting} textNotice={textNotice} onReport={onReport} />
       )}
       {settled && !escalation && blocked && <p class="pl-card__note">{BLOCKED_COPY[blocked]}</p>}
       {settled && !escalation && !blocked && noted && (
         <p class="pl-card__note">I have noted this for the team.</p>
       )}
       {escalation && <Timeline escalation={escalation} elapsedSeconds={elapsedSeconds} />}
+      {escalation && notice && noticeStands(notice, escalation.status) && (
+        <p class="pl-card__note">{NOTICE_COPY[notice]}</p>
+      )}
       {settled && <AnswerActions text={text} rating={rating} canRate={canRate} onRate={onRate} />}
     </div>
+  );
+}
+
+/**
+ * The report button, and above it the one optional question: a text when a change is drafted.
+ *
+ * The number lives in this component and nowhere else in the widget. It leaves in the report
+ * request, only with the box ticked, and it is gone when the card moves on to the timeline.
+ */
+function ReportForm({
+  request,
+  reporting,
+  textNotice,
+  onReport,
+}: {
+  request: FeatureRequest;
+  reporting?: boolean;
+  textNotice?: boolean;
+  onReport: (phone?: string) => void;
+}) {
+  const [wanted, setWanted] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [invalid, setInvalid] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
+  const id = useId();
+
+  // The form grows when the box is ticked and when the error shows, and the list does not follow
+  // a card that grows. Without this the report button can end up below the edge of the panel.
+  useEffect(() => {
+    if (wanted) form.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [wanted, invalid]);
+
+  const submit = (event: Event) => {
+    event.preventDefault();
+    if (reporting) return;
+    const read = readNotice(Boolean(textNotice) && wanted, typed);
+    if (!read.ok) {
+      setInvalid(true);
+      field.current?.focus();
+      return;
+    }
+    onReport(read.phone);
+  };
+
+  return (
+    <form class="pl-report" ref={form} noValidate onSubmit={submit}>
+      {textNotice && (
+        <div class="pl-notify">
+          <label class="pl-check">
+            <input
+              type="checkbox"
+              checked={wanted}
+              disabled={reporting}
+              onChange={(event) => {
+                setWanted((event.currentTarget as HTMLInputElement).checked);
+                setInvalid(false);
+              }}
+            />
+            <span>{NOTICE_LABEL}</span>
+          </label>
+          {wanted && (
+            <>
+              <input
+                ref={field}
+                class="pl-input"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={typed}
+                placeholder={NOTICE_PLACEHOLDER}
+                aria-label={NOTICE_FIELD_LABEL}
+                aria-describedby={invalid ? `${id}-error ${id}-hint` : `${id}-hint`}
+                aria-invalid={invalid}
+                disabled={reporting}
+                onInput={(event) => {
+                  setTyped((event.currentTarget as HTMLInputElement).value);
+                  setInvalid(false);
+                }}
+              />
+              {invalid && (
+                <p class="pl-notify__error" id={`${id}-error`} role="alert">
+                  {NOTICE_ERROR}
+                </p>
+              )}
+              <p class="pl-notify__hint" id={`${id}-hint`}>
+                {NOTICE_HINT}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+      <div class="pl-card__actions">
+        <button type="submit" class="pl-btn pl-btn--accent" disabled={reporting}>
+          {reporting ? 'Reporting' : 'Report to developers'}
+        </button>
+        <span class="pl-card__label">{request.title}</span>
+      </div>
+    </form>
   );
 }
 

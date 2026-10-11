@@ -217,7 +217,7 @@ export async function groupForMessage(messageId: string): Promise<string | null>
 export async function noteRequest(input: {
   projectId: string;
   request: FeatureRequest;
-}): Promise<{ noted: boolean; groupId: string | null }> {
+}): Promise<{ noted: boolean; groupId: string | null; status: RequestGroupStatus | null }> {
   try {
     // Nowhere to file, by design: the `action` this returns is for the reporting path alone.
     const join = await recordRequest({
@@ -226,10 +226,10 @@ export async function noteRequest(input: {
       source: "auto",
       hasRepository: false,
     });
-    return { noted: true, groupId: join.group.id };
+    return { noted: true, groupId: join.group.id, status: join.group.status };
   } catch (error) {
     console.error("automatic request note failed:", (error as Error).message);
-    return { noted: false, groupId: null };
+    return { noted: false, groupId: null, status: null };
   }
 }
 

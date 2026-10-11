@@ -41,6 +41,7 @@ import {
 import { mapWithCurrentPage } from "../graph/live";
 import { belongsToSite } from "../graph/origin";
 import { recallRoute, rememberedAsKnown } from "../routes/provider";
+import { awaitsDraft, offerTrace, textOffer, type TextOffer } from "../sms/offer";
 import { currentPageOf } from "./bind";
 import { answerChat, answerFromPage, answerFromPassage } from "./direct";
 import { loadVisitorFacts, rememberFromTurn } from "./memory";
@@ -64,9 +65,14 @@ import { understand } from "./understand";
  * A drafted request with no repository to file it against is not an offer: the widget says so
  * instead of showing a button that would come back with an error.
  */
-function escalationOffer(request: FeatureRequest | null, repoFullName: string | null): EscalationOffer {
+function escalationOffer(
+  request: FeatureRequest | null,
+  repoFullName: string | null,
+  textNotice: boolean,
+): EscalationOffer {
   if (!request) return { offered: false };
-  return repoFullName ? { offered: true, request } : { offered: false, reason: "no_repository" };
+  if (!repoFullName) return { offered: false, reason: "no_repository" };
+  return textNotice ? { offered: true, request, textNotice: true } : { offered: true, request };
 }
 
 /**
@@ -968,7 +974,20 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
   // A gap the agent found joins the other reports of the same gap and rises with them, so the
   // console can see how often it comes back. Nothing is filed by it: opening an issue in the
   // customer's repository is what "Report to developers" is for.
-  const note = request ? await noteRequest({ projectId, request }) : { noted: false, groupId: null };
+  // The text offer is one database read, made at the same time as the note and ended after 2
+  // seconds at most. It is asked only when there is a report to offer, and the offer is not made
+  // for a gap that is already past its draft.
+  const [note, canText] = await Promise.all([
+    request ? noteRequest({ projectId, request }) : { noted: false, groupId: null, status: null },
+    request && repoFullName ? textOffer(projectId) : null,
+  ]);
+  const textNotice: TextOffer | null =
+    canText?.on && note.status && !awaitsDraft(note.status)
+      ? { on: false, reason: `the gap is ${note.status}` }
+      : canText;
+  if (textNotice) {
+    void emitTrace({ projectId, conversationId, groupId: note.groupId, source: "agent", ...offerTrace(textNotice) });
+  }
 
   // A confirmed absence asks the second question: is this one person, or a pattern? The answer
   // comes from PostHog through the opportunity pipeline, enqueued here and run off this turn.
@@ -980,7 +999,7 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
     type: "answer",
     text,
     steps,
-    escalation: escalationOffer(request, repoFullName),
+    escalation: escalationOffer(request, repoFullName, textNotice?.on === true),
     noted: note.noted,
     ...(plan ? { plan } : {}),
     ...(sources.length ? { sources } : {}),

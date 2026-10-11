@@ -90,7 +90,9 @@ describe("noteRequest", () => {
   it("records the gap for the dashboard and starts no run", async () => {
     const noted = await noteRequest({ projectId: "project-1", request: REQUEST });
 
-    expect(noted).toEqual({ noted: true, groupId: "group-1" });
+    // The gap's state goes back with the note, so the answer does not offer a text for a gap
+    // that is already past its draft.
+    expect(noted).toEqual({ noted: true, groupId: "group-1", status: "observed" });
     expect(writes.filter((write) => write.table === "feature_request_group")).toHaveLength(1);
     expect(runs).toEqual([]);
     expect(writes.some((write) => write.table === "escalation")).toBe(false);

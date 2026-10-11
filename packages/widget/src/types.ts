@@ -3,7 +3,15 @@
 // disagree on what a step is; nothing else in the widget imports the contract from
 // anywhere but here.
 
-export type { AnswerSource, MessageIntent, PlanSource, PlanSummary, Step } from '@lantern/shared';
+export type {
+  AnswerSource,
+  EscalateRequest,
+  MessageIntent,
+  PlanSource,
+  PlanSummary,
+  Step,
+  TextNoticeState,
+} from '@lantern/shared';
 import type { AnswerSource, MessageIntent, PlanSummary, Step } from '@lantern/shared';
 
 export type Affordance = {
@@ -57,8 +65,9 @@ export type FeatureRequest = {
 /** Why the widget cannot report a missing feature: refused up front, or refused when it tried. */
 export type ReportBlock = 'no_repository' | 'failed';
 
+/** `textNotice` is there only when the server can send the one text about this gap. */
 export type EscalationOffer =
-  | { offered: true; request: FeatureRequest }
+  | { offered: true; request: FeatureRequest; textNotice?: true }
   | { offered: false; reason?: 'no_repository' };
 
 export type ChatEvent =

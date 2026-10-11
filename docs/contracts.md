@@ -132,9 +132,10 @@ create table feature_request_group (
   last_seen timestamptz not null default now()
 );
 
--- A person who agreed to one text message when the draft change for a gap opens (migration 0019).
--- No row exists without that consent. The number is sealed in the format of `project.github_token`
--- under its own key, and it is set to null after the text is sent. See "The text notice".
+-- A person who agreed to one text message when the draft change for a gap opens (migrations 0019
+-- and 0020). No row exists without that consent. The number is sealed in the format of
+-- `project.github_token` under its own key, and it is set to null after the text is sent. One
+-- answer stores one number: `message_id` is unique. See "The text notice".
 create table gap_subscriber (
   id uuid primary key default gen_random_uuid(),
   project_id uuid not null references project on delete cascade,
@@ -144,8 +145,17 @@ create table gap_subscriber (
   consent_at timestamptz not null,         -- when the person agreed to the text
   notified_at timestamptz,                 -- the claim, set before the send; null while a text is owed
   created_at timestamptz not null default now(),
+  message_id uuid references message on delete set null,   -- the answer whose card took the number
   unique (group_id, phone_digest)
 );
+create unique index gap_subscriber_message_idx on gap_subscriber (message_id) where message_id is not null;
+
+-- The newest heartbeats of one project's runners, newest first, with the age of each one on the
+-- database's clock (migration 0020). The web app offers the text from this. The title is a
+-- constant in the function, so each plan can use the partial index.
+create index trace_event_worker_online_idx on trace_event (project_id, id) where title = 'worker online';
+create function runner_heartbeats(p_project uuid)
+  returns table (engine text, sms boolean, age_seconds double precision);
 
 create table trace_event (
   id bigserial primary key,                -- the SSE event id and cursor
@@ -525,7 +535,7 @@ export type ChatEvent =
       type: "answer";
       text: string;
       steps: Step[] | null;
-      escalation: EscalationOffer;   // { offered: true, request } | { offered: false, reason? }
+      escalation: EscalationOffer;   // { offered: true, request, textNotice?: true } | { offered: false, reason? }
       noted?: boolean;               // the gap was recorded for the developers without being asked
       plan?: PlanSummary;            // where the steps came from and the count, fixed for the walk
       sources?: AnswerSource[];      // the help articles the answer cites
@@ -629,7 +639,7 @@ with `Authorization: Bearer <token>` resolves to the project whose slug is
 | `GET /api/site/explore` | - (console) | `{job: ExploreJob \| null}`: the newest job, `{id, siteUrl, status: queued \| running \| done \| failed, summary, error, createdAt, startedAt, finishedAt}`; the console polls it |
 | `GET /api/site/map` | - (console) | `{graph, routes, siteUrl}`: the site graph with last-seen times and the known routes |
 | `POST /api/documents/import-help` | - (console) | `{documents: Document[], pages}`; imports the help pages the graph knows (or a sitemap) as one document per article |
-| `POST /api/escalate` | `{key, conversationId, messageId, visitorId?}` | `{escalationId, groupId, status}`, or 409 `{error, reason: "no_repository"}` when the project has no repository bound |
+| `POST /api/escalate` | `{key, conversationId, messageId, visitorId?, notify?: {phone, consent: true}}` | `{escalationId, groupId, status, notify?: "subscribed" \| "not_needed" \| "unavailable"}`; `notify` is in the answer only when it was in the request. 409 `{error, reason: "no_repository"}` when the project has no repository bound. 400 `{error, reason: "consent_required" \| "invalid_phone"}` for a `notify` with no `consent: true` or with a number that has no country code; nothing is written. See "The text notice" |
 | `GET /api/escalations/:id` | `?key=` required, must be the escalation's project | `{id, status, issueUrl, prUrl, deploymentUrl, request, approval, createdAt}` |
 | `POST /api/transcribe` | multipart `key`, `file` (audio/webm or mp3) | `{text}` |
 | `POST /api/speak` | `{key, text}` | `audio/mpeg` bytes, streamed as the TTS deltas arrive |
@@ -690,6 +700,9 @@ The console renders these specially and falls back to a key/value list for anyth
 | `artifact` (pipeline) | `"capability_spec"` -> `{id, version, intent, summary, session_count, median_manual_actions, median_interactions, scenarios, constraints, actions, opportunity_id}`; `"replays"` -> `{linked, checked, failed}`; `"outcome"` -> `{source, intent, eligible, used, succeeded, median_actions_before, median_actions_after, support_before, support_after, support_change_pct}` |
 | `tool` (pipeline) | `{tool: "hogql", transport: "rest", args_summary, result_summary, sessions, matching_sessions, median_manual_actions, median_interactions, window_days, queries: [{name, rows, durationMs, cached}]}` |
 | `status` (text notice) | `{notice: "draft_sms", state: "off" \| "failed" \| "done", reason?, asked?, sent?, unconfirmed?, taken?, reasons?: string[]}`; `taken` counts the people a different run claimed at the same moment, and `reasons` are short codes (`rate_limited`, `http_400`, `timeout`, `unreachable`, `pass_limit`). Never a phone number and never the provider's own words |
+| `decision` (text offer) | `{notice: "draft_sms", offer: "on" \| "off", reason?}`, titled "Text notice: offered with the report" or "Text notice: not offered". One row for each answer that offers a report. Its kind is not `status`, because the console reads the newest `status` row as the worker's heartbeat |
+| `decision` "The user asked for this to be reported" | the feature request, `groupId`, the counts and the priority, and `textNotice: {state, reason?}` when the report asked for the text. Never a phone number |
+| `status` "worker online" | `{engine: "local" \| "forge", at, sms}`: a runner's heartbeat, one row for each project every 60 seconds. The worker writes it for `local` and the forge runner writes it for `forge`. `sms` is true when that runner has both text message variables, and the web app offers the text only from these rows |
 
 Forge rows carry `source: "forge"`; the persona's `tool`, `artifact` and `model` rows are titled
 `<Persona> (<candidate>): ...`, and a `file_change` artifact is `{artifact: "file_change", files: [{path, kind}]}`.
@@ -917,9 +930,57 @@ there that calls the provider.
   through `notifyDraft` in `ForgeDeps`, wired in `lib/forge/queue.ts`. The `local` engine's worker
   sends it in `open_draft_pr` (`steps/pipeline.py`), after it tells Slack. Each engine reads its
   own environment, so under `local` the two variables must be set where the worker runs.
-- **Who writes a row.** No route writes `gap_subscriber`: the widget has no phone field and
-  `POST /api/escalate` takes no number. The list is empty, and the trace row reads "Text notice: no
-  one asked for a text about this request".
+- **Who is offered the text.** The answer event carries `escalation.textNotice: true` only when
+  the runner that sends the text says that it can, and the gap is not past its draft
+  (`lib/sms/offer.ts`). The sender is a process with its own environment: the worker under
+  `local`, the forge runner under `forge`. Each one writes a heartbeat every 60 seconds with
+  `sms: true` or `sms: false`. The offer is on when the runner of the engine that
+  `ESCALATION_ENGINE` names has a heartbeat of at most 3 minutes that says true, and no other
+  live runner says false (a forge run can be started from the console under `local`). The web
+  app's own two variables decide nothing, so a web app that has them and a runner that does not
+  make no promise. The heartbeats are read through `runner_heartbeats`, which measures each age
+  on the database's clock. A read that fails means no offer. The trace says which it was, with
+  the reason. A runner that is started again without its variables is still read as "can send"
+  until its next heartbeat.
+- **Who writes a row.** `POST /api/escalate`, through `subscribeToGap` (`lib/sms/subscribe.ts`),
+  and nothing else. The widget's gap card shows one box that is not ticked, "Text me when a change
+  for this is drafted". With the tick it shows a number field and the sentence that the person
+  agrees to. The number leaves the widget only in the report request, as
+  `notify: {phone, consent: true}`. The route refuses a `notify` with no `consent: true` and a
+  number that `toE164` does not accept, before it writes anything. `toE164` (`@lantern/shared`)
+  removes spaces, hyphens, dots and brackets, removes a "(0)" directly after the country code,
+  refuses a "(0)" in any other place, and never guesses a country code.
+- **What the report answers.** The report is recorded first, and what becomes of the text never
+  fails it. The answer's `notify` is one of three states, and the card says each one in words.
+
+  | State | When | The number |
+  |---|---|---|
+  | `subscribed` | The row is stored and one text is owed or on its way | Sealed in `phone_sealed` |
+  | `not_needed` | The gap is `pr_open`, `awaiting_approval`, `shipped` or `rejected`. Each of these comes after a draft pull request, so a change was drafted already and no text will come | Not stored by this report |
+  | `unavailable` | No runner can send the text now, a limit is reached, the answer already stored a different number, the gap is gone, or a query failed | Not stored by this report |
+
+  The card says "this report did not save your number" for the last two. That is the exact
+  claim: an earlier report of the same person can still have a number stored for the same gap.
+  The line "You will get one text" stays on the card only while the report is before `pr_open`.
+- **A row that no run will see is taken back.** The run sets the gap to `pr_open` before it reads
+  who is owed a text. `subscribeToGap` writes the row first and reads the gap's state second. If
+  the row was written too late for the run to see it, the state read is `pr_open` or later, and the
+  row is deleted while no run holds it. If a query fails after the write, the row is deleted too.
+  A request deletes only the row of its own answer (`message_id`), so it cannot break the promise
+  that an earlier answer made. When nothing was deleted, the row is read: a row that still holds
+  a number is owed a text or on its way to one, and the answer is `subscribed`.
+- **Three limits bound what a caller can make the company send.** The embed key is public, and
+  nothing proves that a number belongs to the caller. So: one answer stores one number
+  (`message_id` is unique), one gap holds at most 50 people who are owed a text (`GAP_LIMIT`, the
+  number that one pass reaches in its 60 seconds), and one project takes at most 100 new numbers
+  in 24 hours (`DAY_LIMIT`). The two counts are read before the write and do not look at the
+  number, so the answer does not say if a number was known before. What stays possible: a caller
+  who asks 100 real questions in one day can make the company text 100 numbers that are not the
+  caller's, one time each. A code that proves the number is the fix, and it is not built.
+- **A person who asks again is texted again.** A row whose text ended (sent, never confirmed, or
+  claimed more than 15 minutes ago by a run that stopped) is armed again with the new number and a
+  new `consent_at`. A row whose text is owed or on its way is left as it is. So the rule is one
+  text for one consent.
 - **One gap is one text for one person.** The send call has no idempotency key, so a second call
   is a second text. A sender claims a person first, with one conditional update that sets
   `notified_at` only where it is null, and sends only when the update returned the row. The client
@@ -957,8 +1018,12 @@ there that calls the provider.
   claim are made one time. A claim that is repeated after a lost answer comes back empty when the
   first one landed, and then nobody can say who holds the person. A release that is repeated can
   free the claim of a run that took the person in between.
-- **Nothing starts a second pass by itself.** A person who is still owed after a pass gets the
-  text when a later draft pull request opens for the same gap.
+- **Nothing starts a second pass.** A gap gets one draft pull request (`actionFor` starts no
+  second one). So a person who is still owed after the pass gets no text, and the sealed number
+  stays stored: a refusal for that person, a pass that stopped at a failure, the 60 second budget.
+  The worker runs the pass in a `finally` once the pull request is open, so a step that fails
+  after that point (the comment on the pull request, a trace row) does not skip it. A sweep that
+  texts owed people while the draft is open is the fix for the rest, and it is not built.
 - **What a stopped run leaves.** A run that stops between the claim and the record of the send
   leaves a claimed row with its number. A claim is held for seconds, so each pass first erases the
   number of every claim of the project that is older than 15 minutes (`forgetStale`). A stored
@@ -991,7 +1056,15 @@ there that calls the provider.
   results are in the basic SMS alphabet.
 
 With `DIAL_API_KEY` or `DIAL_FROM_NUMBER` blank the notice is off, the table is not read, and the
-run is the same as before, plus the one trace row.
+run is the same as before, plus the one trace row. The answer then has no `textNotice`, the card
+has no field, and the report is the same as before.
+
+What is not built. A person cannot take a request for a text back. A sealed number stays stored
+for as long as no draft opens and the gap is not deleted, and after a pass that did not reach the
+person. When the database fails two times in one request (the write lands and the delete does
+not), the answer is `unavailable` and the row stays. The forge engine logs a failed write of the
+gap's state and goes on, so after such a failure a row can be stored for a gap whose draft is
+open.
 
 ### The local engine's draft
 
@@ -1179,4 +1252,6 @@ Codex inside a devbox, optional locally where the saved Codex login is used. Rou
 where the store keeps one JSON file per project (default the OS temp dir). Text messages:
 `DIAL_API_KEY` and `DIAL_FROM_NUMBER` turn them on together, and they are off when one is blank;
 `DIAL_API_URL` is the API base (default `https://api.getdial.ai`). The worker reads the same three
-names from its own environment (`services/worker/config.py`).
+names from its own environment (`services/worker/config.py`). Only the runner that sends needs
+them: the worker under `local`, the forge runner under `forge`. Its heartbeat tells the web app
+that the text can be offered, and the web app reads neither variable for the offer.

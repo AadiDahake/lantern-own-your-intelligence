@@ -329,14 +329,19 @@ def claim_queued_local() -> dict[str, Any] | None:
     return claimed[0] if claimed else None
 
 
-def heartbeat(project_id: str, engine: str = "local") -> int | None:
-    """The console shows the worker as online when one of these arrived in the last two minutes."""
+def heartbeat(project_id: str, engine: str = "local", sms: bool = False) -> int | None:
+    """The console shows the worker as online when one of these arrived in the last two minutes.
+
+    `sms` says if this worker can send a text message. The web app offers the one text about a gap
+    only when the last heartbeat says so (`apps/web/lib/sms/offer.ts`), because this process sends
+    that text and the web app cannot see its environment.
+    """
     return emit_trace(
         project_id,
         None,
         "status",
         "worker online",
-        detail={"engine": engine, "at": _now()},
+        detail={"engine": engine, "at": _now(), "sms": sms},
     )
 
 

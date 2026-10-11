@@ -195,3 +195,54 @@ test("a greeting is answered without checks, and nothing is offered to report", 
   );
   expect(answer).not.toMatch(/I am sorry|report this to the developers/i);
 });
+
+test("a gap report can ask for one text, and the number leaves only with the tick", async ({ page }) => {
+  // Against a running stack the report button files a real issue, so this runs on the mock only.
+  test.skip(Boolean(process.env.NOVAAIR_BASE_URL), "the report is an outward action on a running stack");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open support" }).click();
+  const composer = page.getByRole("textbox", { name: "Ask a question" });
+  await composer.fill("Can you seat my family together?");
+  await composer.press("Enter");
+
+  const report = page.getByRole("button", { name: "Report to developers" });
+  await expect(report).toBeVisible({ timeout: 30_000 });
+  const tick = page.getByRole("checkbox", { name: "Text me when a change for this is drafted" });
+  const number = page.getByRole("textbox", { name: "Mobile number with country code" });
+  // The question is optional: the box is not ticked, and no field asks for a number yet.
+  await expect(tick).not.toBeChecked();
+  await expect(number).toHaveCount(0);
+
+  await tick.check();
+  await expect(number).toBeVisible();
+  await expect(page.getByText("You get one text, and only if the team drafts a change.", { exact: false })).toBeVisible();
+
+  // A number with no country code stops the report, and the words are next to the field.
+  let reports = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/escalate") && request.method() === "POST") reports += 1;
+  });
+  await number.fill("415 555 0123");
+  await report.click();
+  // The host page has an alert region of its own (the framework's route announcer).
+  await expect(page.getByRole("alert").filter({ hasText: "Enter your number with the country code" })).toBeVisible();
+  await expect(number).toBeFocused();
+  expect(reports).toBe(0);
+
+  // The whole flow works from the keyboard: Enter in the field sends the report.
+  await number.fill("+1 (415) 555-0123");
+  const [sent] = await Promise.all([
+    page.waitForRequest((request) => request.url().endsWith("/api/escalate") && request.method() === "POST"),
+    number.press("Enter"),
+  ]);
+  expect(sent.postDataJSON().notify).toEqual({ phone: "+14155550123", consent: true });
+
+  await expect(page.getByText("You will get one text when a change for this is drafted.", { exact: true })).toBeVisible();
+  // The card moved on to the progress list, and the number is not in the page any more.
+  await expect(report).toHaveCount(0);
+  await expect(number).toHaveCount(0);
+  const panel = await page.evaluate(() => document.querySelector("lantern-widget")?.shadowRoot?.innerHTML ?? "");
+  expect(panel).not.toContain("4155550123");
+  expect(panel).not.toContain("555-0123");
+});

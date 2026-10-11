@@ -211,6 +211,13 @@ The `escalation` row is the queue. `lib/forge/queue.ts` holds both claims and
 `apps/web/scripts/forge-runner.ts` is the loop, which polls every 2 s and carries each claimed row
 on its own promise, so a run waiting on a deployment does not hold up the next one.
 
+The runner also writes a heartbeat for each project every 60 s (`lib/forge/heartbeat.ts`): a
+`status` trace row titled "worker online" with `{engine: "forge", at, sms}`, the same row the
+worker writes for `local`. The console's "Agent live" reads it. `sms` says if this process has
+both text message variables, and the web app offers the text on the widget's gap card only when
+the runner says so, because this process sends that text and the web app cannot see its
+environment.
+
 | Queue | A row joins it when | The runner claims it by | Then |
 |---|---|---|---|
 | A run to build | `POST /api/opportunities/:groupId/forge` writes `engine='forge'`, `status='queued'` and the `capability_ir` it will build | moving `queued` to `drafting`, conditional on it still being `queued` | `runForge` from step 8, ending on the `pause` for a person |

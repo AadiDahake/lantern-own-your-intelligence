@@ -68,7 +68,11 @@ phone number is never in a trace row, a log line or an error. "The text notice" 
 
 Every step updates `escalation.status` and writes `trace_event` rows (source `workflow`) through
 PostgREST, so the console's Activity page shows the run live. A heartbeat writes a `status` trace
-event ("worker online") per project every 60 s.
+event ("worker online") per project every 60 s. Its detail says `sms: true` when both text message
+variables are set here. The web app reads the last heartbeat and offers "Text me when a change for
+this is drafted" on the widget's gap card only then, because this process sends that text. Once
+the draft pull request is open, the text notice runs whatever fails next in that step, so a
+refused comment on the pull request does not cost each person their text.
 
 The model ids the worker uses live in `steps/llm.py` and nowhere else. `docs/contracts.md`
 section 5 records each choice and why.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftNoticeText, isE164, SMS, smsText } from "../src/sms";
+import { draftNoticeText, isE164, SMS, smsText, toE164 } from "../src/sms";
 import vectors from "./fixtures/sms-text.json";
 
 /** Each character one segment of a plain text can hold without the wider encoding. */
@@ -77,5 +77,63 @@ describe("isE164", () => {
 
   it.each(vectors.e164.invalid)("refuses %j", (value) => {
     expect(isE164(value)).toBe(false);
+  });
+});
+
+describe("toE164", () => {
+  it.each([
+    ["+14155550123", "+14155550123"],
+    ["  +1 415 555 0123  ", "+14155550123"],
+    ["+1 (415) 555-0123", "+14155550123"],
+    ["+1.415.555.0123", "+14155550123"],
+    ["+44 20 7946 0958", "+442079460958"],
+    ["+44 (0)20 7946 0958", "+442079460958"],
+    ["+44 (0) 20 7946 0958", "+442079460958"],
+    ["+44 ( 0 ) 20 7946 0958", "+442079460958"],
+    ["+44(0)7700 900123", "+447700900123"],
+    ["+39 06 1234 5678", "+390612345678"],
+    ["+49\t30\n901820", "+4930901820"],
+  ])("reads %j as %s", (typed, number) => {
+    expect(toE164(typed)).toBe(number);
+  });
+
+  it.each([
+    "",
+    " ",
+    "4155550123",
+    "(415) 555-0123",
+    "0044 20 7946 0958",
+    "011 44 20 7946 0958",
+    "+0 415 555 0123",
+    "+1 415 55",
+    "+1 415 555 0123 ext 4",
+    "+1 415 555 0123 x4",
+    "+1415555012345678",
+    "++14155550123",
+    "+1+4155550123",
+    "tel:+14155550123",
+    "+1 415 555 0123, +1 415 555 0124",
+    "+1 415 555 O123",
+    // A zero in brackets means "not dialled from abroad" only directly after the country code.
+    "+1 415 555 (0)123",
+    "+1 415 (0) 555 0123",
+    "+44 (0)20 7946 (0)958",
+    "(0)20 7946 0958",
+  ])("refuses %j", (typed) => {
+    expect(toE164(typed)).toBeNull();
+  });
+
+  it("gives back each number that is already in E.164 form", () => {
+    for (const value of vectors.e164.valid) expect(toE164(value)).toBe(value);
+  });
+
+  it("never guesses a country code", () => {
+    // Ten digits are a US number to one person and the start of a different number to the next.
+    expect(toE164("415 555 0123")).toBeNull();
+    expect(toE164("1 415 555 0123")).toBeNull();
+  });
+
+  it("refuses a value that is longer than a typed number", () => {
+    expect(toE164(`+1415555${" ".repeat(40)}0123`)).toBeNull();
   });
 });

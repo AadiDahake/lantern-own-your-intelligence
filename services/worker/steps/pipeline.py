@@ -375,22 +375,29 @@ def open_draft_pr(req: FeatureRequestInput, issue: IssueRef, plan: Plan, draft: 
     )
     ref = PrRef(number=int(pr["number"]), url=pr["html_url"], branch=branch, head_sha=head_sha, node_id=pr.get("node_id", ""))
     db.update_escalation(req.escalation_id, pr_url=ref.url, pr_number=ref.number, branch=branch)
-    _set_group(req, pr_url=ref.url, status="pr_open")
 
-    # The gates already passed on this branch, so say so on the pull request itself.
-    if draft.gates:
-        gate_comment = issue_text.build_gate_comment(
-            [(gate.name, gate.ok, gate.duration_s) for gate in draft.gates], config.activity_url()
-        )
-        github.comment(ref.number, gate_comment)
-        reporter.tool(
-            f"Reported the gate results on PR #{ref.number}", "add_issue_comment", "rest",
-            f"POST /repos/{req.repo_full_name}/issues/{ref.number}/comments",
-            ", ".join(f"{gate.name} {'passed' if gate.ok else 'failed'} in {gate.duration_s:.0f}s" for gate in draft.gates),
-        )
+    # The pull request is open from here on. The people who asked for a text are told one time
+    # whatever fails between this line and the notice: the comment on the pull request, a trace
+    # row, or the write of the gap's state. Without the `finally`, one refused comment left each
+    # person with a stored number and no text, because no later run reads who is owed.
+    try:
+        _set_group(req, pr_url=ref.url, status="pr_open")
 
-    slack.notify(f"Lantern drafted {ref.url} for \"{req.title}\" and it is waiting for approval in the console.")
-    _text_the_people_who_asked(req, reporter)
+        # The gates already passed on this branch, so say so on the pull request itself.
+        if draft.gates:
+            gate_comment = issue_text.build_gate_comment(
+                [(gate.name, gate.ok, gate.duration_s) for gate in draft.gates], config.activity_url()
+            )
+            github.comment(ref.number, gate_comment)
+            reporter.tool(
+                f"Reported the gate results on PR #{ref.number}", "add_issue_comment", "rest",
+                f"POST /repos/{req.repo_full_name}/issues/{ref.number}/comments",
+                ", ".join(f"{gate.name} {'passed' if gate.ok else 'failed'} in {gate.duration_s:.0f}s" for gate in draft.gates),
+            )
+
+        slack.notify(f"Lantern drafted {ref.url} for \"{req.title}\" and it is waiting for approval in the console.")
+    finally:
+        _text_the_people_who_asked(req, reporter)
     _set_status(req, "awaiting_approval")
     _set_group(req, status="awaiting_approval")
     # The last two rows a reader sees: the pull request itself, then the card that asks them to

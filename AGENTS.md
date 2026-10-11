@@ -211,6 +211,17 @@ log line or a reason code, and the provider's own error text is never copied, be
 the number. `apps/web/lib/dial.ts` is the only module in the web app that calls the provider.
 "The text notice" in section 4 of `docs/contracts.md` has the table and the outcomes.
 
+A number is taken only with the person's tick on the gap card, and one module writes it:
+`apps/web/lib/sms/subscribe.ts`, called by `POST /api/escalate` after the report is recorded. The
+offer of the text is a promise, so it follows the runner that sends: the worker under `local` and
+the forge runner under `forge` each say `sms: true` in a heartbeat, and `lib/sms/offer.ts` reads
+only that. Never offer the text from the web app's own variables: the sender is a different
+process. A row is written first and the gap's state is read second, so a row that no run will see
+is taken back, and a request takes back only the row of its own answer. The embed key is public
+and no number is proven, so three limits bound what a caller can make the company send (one
+number for one answer, 50 people for one gap, 100 new numbers a day for one project); keep them
+in front of any new path that stores a number.
+
 The worker sends the same text under the `local` engine, so the rule has two copies:
 `apps/web/lib/sms` with `packages/shared/src/sms.ts`, and `services/worker/steps/sms_notice.py`
 with `steps/sms_text.py`. Change them together. `packages/shared/test/fixtures/sms-text.json` is
