@@ -19,6 +19,7 @@
  */
 import { targetProductionUrl, targetVercelProject, vercelTokenIfSet, type ForgeStrategyName } from "../env";
 import { appUrl, forgeStrategy } from "../env";
+import { draftNoticeFor } from "../sms/subscribers";
 import { serviceClient } from "../supabase";
 import { buildForgeDeps, buildStrategy } from "./config";
 import { approveForge, runForge, type ForgeRunResult } from "./engine";
@@ -156,7 +157,10 @@ export async function runClaimedRun(row: ForgeQueueRow, log: (line: string) => v
         opportunityUrl: `${appUrl()}/console/activity?escalation=${row.id}`,
         push: true,
       },
-      buildForgeDeps(store, { name: forgeStrategy(), log }),
+      {
+        ...buildForgeDeps(store, { name: forgeStrategy(), log }),
+        notifyDraft: draftNoticeFor({ projectId: row.projectId, groupId: row.groupId }),
+      },
     );
   } catch (error) {
     // runForge reports its own failures; this catches what happens before it can.

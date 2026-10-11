@@ -132,6 +132,21 @@ create table feature_request_group (
   last_seen timestamptz not null default now()
 );
 
+-- A person who agreed to one text message when the draft change for a gap opens (migration 0019).
+-- No row exists without that consent. The number is sealed in the format of `project.github_token`
+-- under its own key, and it is set to null after the text is sent. See "The text notice".
+create table gap_subscriber (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references project on delete cascade,
+  group_id uuid not null references feature_request_group on delete cascade,
+  phone_sealed text,                       -- AES-256-GCM 'iv.ciphertext.tag'; null after the text is sent
+  phone_digest text not null,              -- keyed hash of the number: one number is one row for one gap
+  consent_at timestamptz not null,         -- when the person agreed to the text
+  notified_at timestamptz,                 -- the claim, set before the send; null while a text is owed
+  created_at timestamptz not null default now(),
+  unique (group_id, phone_digest)
+);
+
 create table trace_event (
   id bigserial primary key,                -- the SSE event id and cursor
   project_id uuid not null references project on delete cascade,
@@ -674,6 +689,7 @@ The console renders these specially and falls back to a key/value list for anyth
 | `capability` | one `CompilerEvent` from `@lantern/capability`: `{stage, title, detail, at}`; the `Chosen:` event's detail carries `rejected_too_low`, `rejected_too_high` and `coverage` |
 | `artifact` (pipeline) | `"capability_spec"` -> `{id, version, intent, summary, session_count, median_manual_actions, median_interactions, scenarios, constraints, actions, opportunity_id}`; `"replays"` -> `{linked, checked, failed}`; `"outcome"` -> `{source, intent, eligible, used, succeeded, median_actions_before, median_actions_after, support_before, support_after, support_change_pct}` |
 | `tool` (pipeline) | `{tool: "hogql", transport: "rest", args_summary, result_summary, sessions, matching_sessions, median_manual_actions, median_interactions, window_days, queries: [{name, rows, durationMs, cached}]}` |
+| `status` (text notice) | `{notice: "draft_sms", state: "off" \| "failed" \| "done", reason?, asked?, sent?, unconfirmed?, taken?, reasons?: string[]}`; `taken` counts the people a different run claimed at the same moment, and `reasons` are short codes (`rate_limited`, `http_400`, `timeout`, `unreachable`, `pass_limit`). Never a phone number and never the provider's own words |
 
 Forge rows carry `source: "forge"`; the persona's `tool`, `artifact` and `model` rows are titled
 `<Persona> (<candidate>): ...`, and a `file_change` artifact is `{artifact: "file_change", files: [{path, kind}]}`.
@@ -889,6 +905,63 @@ request rather than a run of their own. Under `local` the insert is the whole ha
 runner polls for rows with `status = 'queued'` and `engine = 'local'` and reads the group off
 `escalation.group_id`.
 
+### The text notice
+
+A person who reported a gap can agree to one text message when the draft change for it opens.
+`gap_subscriber` holds one row for each person and gap. `apps/web/lib/sms` is the rule, and
+`apps/web/lib/dial.ts` is the only module in the web app that calls the provider.
+
+- **Who sends it.** The forge engine, when it opens the draft pull request (`notifyDraft` in
+  `ForgeDeps`, wired in `lib/forge/queue.ts`). The `local` engine's worker does not send it.
+- **Who writes a row.** No route writes `gap_subscriber`: the widget has no phone field and
+  `POST /api/escalate` takes no number. The list is empty, and the trace row reads "Text notice: no
+  one asked for a text about this request".
+- **One gap is one text for one person.** The send call has no idempotency key, so a second call
+  is a second text. A sender claims a person first, with one conditional update that sets
+  `notified_at` only where it is null, and sends only when the update returned the row. The client
+  makes one attempt and nothing repeats it.
+- **How a send ends.** There are three results, and `sendSms` decides which one applies.
+
+  | Result | When | What the store does |
+  |---|---|---|
+  | `sent` | A 2xx whose body is the provider's own answer, `{message: {...}}` | `phone_sealed` is set to null. The claim stays. |
+  | `refused` | Nothing was sent: any 4xx, a redirect (never followed), or a request that could not leave (connection refused, no such host, a base address that is not a URL) | `notified_at` goes back to null, so the text is still owed. The number stays. |
+  | `unconfirmed` | The text may have gone: a 5xx, a timeout, a connection that broke, or a 2xx that is not the provider's answer (a page from a wrong address) | The claim stays and the number is erased, so nobody sends it again. |
+
+- **When a pass stops.** At a refusal that is not about the person (`forAll`: 401, 402, a
+  redirect, an address that cannot be reached) and at an `unconfirmed` result: the next send is
+  expected to end the same way. The people who are left stay unclaimed, so a provider outage costs
+  one person their text and not everyone. A pass also stops after 200 people (`PASS_LIMIT`) or 60
+  seconds (`PASS_BUDGET_MS`), because the run waits for it; the trace row then says `pass_limit`
+  or `time_budget`. Every query of the store has a 10 second limit.
+- **Nothing starts a second pass by itself.** A person who is still owed after a pass gets the
+  text when a later draft pull request opens for the same gap.
+- **What a stopped run leaves.** A run that stops between the claim and the record of the send
+  leaves a claimed row with its number. A claim is held for seconds, so each pass first erases the
+  number of every claim of the project that is older than 15 minutes (`forgetStale`). A stored
+  value that does not open is skipped and is not erased: a runner with a different service role
+  key reads every number that way, and that mistake must not destroy what people gave.
+- **What the text says.** `draftNoticeText` in `@lantern/shared`: the company's name, the gap's
+  title, that a change is drafted and the team reviews it next, and that no more texts follow. It
+  does not say that the feature is live. `smsText` folds every text into the basic SMS alphabet,
+  because one character outside it lowers the provider's cap from 1530 to 670 characters and more
+  than doubles the segments of a long text. A character with no plain form is removed; it is never
+  replaced by a different meaning.
+- **A quoted name cannot be followed.** A gap's title starts as a visitor's words, and the text
+  goes out under the company's name. So the quoted company and title keep letters, digits, spaces,
+  an apostrophe, a comma and a hyphen. A dot, a slash, a colon and an at sign are removed, and so
+  is anything that reads as a phone number. A phone then has no link and no number to offer.
+- **What the trace says.** One `status` row for each draft pull request, written before the pull
+  request row: "Text notice: off" with the missing variable, "Text notice: no one asked for a text
+  about this request", "Text notice: 2 of 3 sent" (status `failed` when one was not sent), "Text
+  notice: a different run sent the texts", or "Text notice: could not read who asked for a text".
+  A notice that fails never fails the run.
+- **A phone number is never logged.** It is in the sealed column and in the request body to the
+  provider, and nowhere else: not in a trace row, an error, a reason code, or a console line.
+
+With `DIAL_API_KEY` or `DIAL_FROM_NUMBER` blank the notice is off, the table is not read, and the
+run is the same as before, plus the one trace row.
+
 ### The local engine's draft
 
 `services/worker` turns one approved issue into one draft pull request. What the model is given and
@@ -984,6 +1057,26 @@ Notes the API enforces:
 - Text to speech answers with chunked audio, so `POST /api/speak` yields each `audio/mpeg` chunk as
   it lands and playback starts before the utterance is complete.
 
+### Text messages
+
+The provider is Dial. `SMS` in `@lantern/shared` holds the two paths and the caps,
+`apps/web/lib/dial.ts` is the only module in the web app that calls it, and the base address is
+`DIAL_API_URL`. Nothing else names an endpoint.
+
+Chosen on **2026-10-11** by reading <https://docs.getdial.ai> and the OpenAPI document it links.
+
+| What | Value | Why |
+|---|---|---|
+| Send one text | `POST /api/v1/messages`, `Authorization: Bearer <key>`, JSON `{to, fromNumber, body}`; `201 {message: {id, status}}` | The OpenAPI document uses the `/api/v1` prefix, and some guide pages show `/v1`. The path is one constant in `SMS`, and `npm run dial:live` proves it with the first key. |
+| List the account's numbers | `GET /api/v1/numbers` | Read-only. The live check uses it to prove the key, and to show the sender number's 10DLC status, which decides if a US phone gets the text. |
+| Body cap | 1530 characters; 670 when one character is outside the basic SMS alphabet | From the send call's reference. `smsText` keeps every body in the basic alphabet, so the 1530 cap always applies. |
+| `channel` | not sent | "Omit to use the number's own default - a standard number sends SMS, an iMessage number sends iMessage", and an iMessage number falls back to SMS for a phone that cannot take it. So the notice works with either kind of sender number. |
+| SDK | not used | The call is one POST. The SDK adds two runtime dependencies for it. |
+| Retries | none | "Not idempotent - there is no idempotency key, so retrying a failed request can send a duplicate message." A 4xx means nothing was sent. A 5xx or no answer is not known, and is never sent again. |
+| Redirects | never followed (`redirect: "manual"`) | A redirect repeats a POST as a GET, and the page it lands on can answer 200. A 3xx is read as "nothing was sent, and the base address is wrong". |
+| What counts as sent | a 2xx with `{message: {...}}` in the body | A 200 from a different server must not erase a person's number as if the text had gone. `message.id` is kept when it is a string, and is not required. |
+| Error reason | the provider's `code` when it is a lower-case word (`insufficient_credit`, `rate_limited`), else `http_<status>` | The provider's error text can quote the phone number, so it is never copied. |
+
 
 ## 6. Capability IR
 
@@ -1050,4 +1143,6 @@ repository bound; `FORGE_LOCAL_CACHE_DIR` for the local strategy's clone; `OPENA
 Codex inside a devbox, optional locally where the saved Codex login is used. Route memory's:
 `MEMORABLE_API_KEY` turns it on with extraction, `MEMORABLE_API_URL` is the extraction API base,
 `LANTERN_ROUTE_MEMORY=local` turns it on with no Memorable key, and `LANTERN_ROUTE_MEMORY_DIR` is
-where the store keeps one JSON file per project (default the OS temp dir).
+where the store keeps one JSON file per project (default the OS temp dir). Text messages:
+`DIAL_API_KEY` and `DIAL_FROM_NUMBER` turn them on together, and they are off when one is blank;
+`DIAL_API_URL` is the API base (default `https://api.getdial.ai`).

@@ -1,0 +1,159 @@
+{
+  "about": "Inputs and the exact text each one becomes. A second implementation of these rules must give the same output for each input.",
+  "fold": [
+    {
+      "in": "Seat a party together",
+      "out": "Seat a party together"
+    },
+    {
+      "in": "Let me \u201cpick\u201d my family\u2019s seats \u2014 fast",
+      "out": "Let me \"pick\" my family's seats - fast"
+    },
+    {
+      "in": "Caf\u00e9 cr\u00e8me br\u00fbl\u00e9e \u00e0 la carte",
+      "out": "Cafe creme brulee a la carte"
+    },
+    {
+      "in": "Cafe\u0301 with a separate accent",
+      "out": "Cafe with a separate accent"
+    },
+    {
+      "in": "Stra\u00dfe, \u00c6ble, \u0142\u00f3d\u017a, \u00f8l",
+      "out": "Strasse, AEble, lodz, ol"
+    },
+    {
+      "in": "Export \ud83d\ude80 to CSV \u2026 now",
+      "out": "Export to CSV ... now"
+    },
+    {
+      "in": "a [b] {c} d|e f\\g ~h `i` j^k",
+      "out": "a (b) (c) d/e f/g -h 'i' jk"
+    },
+    {
+      "in": "  two   spaces\tand a tab\r\nthen a line  ",
+      "out": "two spaces and a tab\nthen a line"
+    },
+    {
+      "in": "old\rline ends",
+      "out": "old\nline ends"
+    },
+    {
+      "in": "one\n\n\n\n\nfive",
+      "out": "one\n\nfive"
+    },
+    {
+      "in": "non\u00a0breaking\u2011hyphen \u2022 bullet\u2009thin\u3000wide",
+      "out": "non breaking-hyphen - bullet thin wide"
+    },
+    {
+      "in": "Price: \u20ac5 or \u00a34, 50% off @ 9:00?",
+      "out": "Price: EUR5 or GBP4, 50% off @ 9:00?"
+    },
+    {
+      "in": "a \u2260 b, 5\u00d73, 6\u00f72, 1\u00bd cups, x\u00b2, \u2264 9",
+      "out": "a b, 5x3, 6/2, 1 cups, x, 9"
+    },
+    {
+      "in": "\uff26\uff55\uff4c\uff4c width and \ufb01ne ligatures",
+      "out": "Full width and fine ligatures"
+    },
+    {
+      "in": "\u5ea7\u5e2d\u3092\u9078\u3076",
+      "out": ""
+    },
+    {
+      "in": "",
+      "out": ""
+    }
+  ],
+  "cut": [
+    {
+      "in": "abcdefghijklmnopqrstuvwxyz",
+      "max": 10,
+      "out": "abcdefg..."
+    },
+    {
+      "in": "abcdef ghijklmnop",
+      "max": 10,
+      "out": "abcdef..."
+    },
+    {
+      "in": "abcdefghij",
+      "max": 10,
+      "out": "abcdefghij"
+    },
+    {
+      "in": "abcdef",
+      "max": 4,
+      "out": "a..."
+    },
+    {
+      "in": "abcdef",
+      "max": 3,
+      "out": "abc"
+    },
+    {
+      "in": "abcdef",
+      "max": 2,
+      "out": "ab"
+    },
+    {
+      "in": "abcdef",
+      "max": 0,
+      "out": ""
+    },
+    {
+      "in": "abcdef",
+      "max": -5,
+      "out": ""
+    }
+  ],
+  "notice": [
+    {
+      "company": "NovaAir",
+      "title": "Seat a party together",
+      "out": "NovaAir: you asked for a text about \"Seat a party together\". A change for it is now drafted and the team reviews it next. This is the only text for this request."
+    },
+    {
+      "company": "Caf\u00e9 \u201cLuna\u201d, Inc.",
+      "title": "Let me pick my family\u2019s seats \u2014 all at once, without picking them one by one on the seat map each time I book",
+      "out": "Cafe Luna, Inc: you asked for a text about \"Let me pick my family's seats - all at once, without picking them one by one...\". A change for it is now drafted and the team reviews it next. This is the only text for this request."
+    },
+    {
+      "company": "NovaAir",
+      "title": "Refund now: go to https://evil.example/claim?id=7 or call +1 (415) 555-0123 / 4155550123, mail a@b.co",
+      "out": "NovaAir: you asked for a text about \"Refund now go to https evil example claim id 7 or call, mail a b co\". A change for it is now drafted and the team reviews it next. This is the only text for this request."
+    },
+    {
+      "company": "NovaAir",
+      "title": "Add 2 more seats to booking NVA7K2 for 3 people, order 12345, on 2026-10-11",
+      "out": "NovaAir: you asked for a text about \"Add 2 more seats to booking NVA7K2 for 3 people, order, on\". A change for it is now drafted and the team reviews it next. This is the only text for this request."
+    },
+    {
+      "company": "",
+      "title": "\u5ea7\u5e2d\u3092\u9078\u3076",
+      "out": "Support: you asked for a text when work on your request starts. A change for it is now drafted and the team reviews it next. This is the only text for this request."
+    }
+  ],
+  "e164": {
+    "valid": [
+      "+14155550123",
+      "+442071838750",
+      "+4915123456789",
+      "+8613800138000",
+      "+1234567"
+    ],
+    "invalid": [
+      "",
+      "4155550123",
+      "+0415555012",
+      "+1 415 555 0123",
+      "+1-415-555-0123",
+      "+123456",
+      "+1234567890123456",
+      "+1415555012a",
+      " +14155550123",
+      "+14155550123\n"
+    ]
+  }
+}

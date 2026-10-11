@@ -148,6 +148,93 @@ describe("runForge", () => {
     expect(body).not.toContain(".lantern/");
   });
 
+  it("says that the text notice is off when the run has no list of people, and still ends on the pause", async () => {
+    const { store, deps } = setup();
+    await run(deps);
+    const titles = store.titles();
+    const notice = store.events.find((event) => event.title === "Text notice: off");
+    expect(notice).toMatchObject({ kind: "status", status: "ok", source: "forge" });
+    expect(notice?.detail).toEqual({ notice: "draft_sms", state: "off", reason: "this run has no list of people to text" });
+    // The notice row is before the pull request row, so the last two rows are still the pull
+    // request and the card that asks a person to decide.
+    expect(titles.slice(-3)).toEqual(["Text notice: off", "Draft PR #182", PAUSE_LABEL]);
+  });
+
+  it("texts the people who asked once the draft pull request is open, and writes the count", async () => {
+    const { strategy, store, deps } = setup();
+    let calls = 0;
+    let pullRequestOpenAtCall = false;
+    deps.notifyDraft = async () => {
+      calls += 1;
+      pullRequestOpenAtCall = strategy.sandboxes.get("B")?.pr !== null && store.group.status === "pr_open";
+      return { state: "done", asked: 3, sent: 2, unconfirmed: 0, taken: 0, reasons: ["rate_limited"] };
+    };
+    const result = await run(deps);
+
+    expect(calls).toBe(1);
+    expect(pullRequestOpenAtCall).toBe(true);
+    expect(result.status).toBe("awaiting_approval");
+    const notice = store.events.find((event) => event.title === "Text notice: 2 of 3 sent");
+    expect(notice).toMatchObject({ kind: "status", status: "failed" });
+    expect(notice?.detail).toEqual({
+      notice: "draft_sms",
+      state: "done",
+      asked: 3,
+      sent: 2,
+      unconfirmed: 0,
+      taken: 0,
+      reasons: ["rate_limited"],
+    });
+    expect(store.titles().slice(-2)).toEqual(["Draft PR #182", PAUSE_LABEL]);
+  });
+
+  it("does not fail the run when the text notice throws", async () => {
+    const { store, deps } = setup();
+    deps.notifyDraft = async () => {
+      throw new Error("the provider module could not load");
+    };
+    const result = await run(deps);
+
+    expect(result.status).toBe("awaiting_approval");
+    expect(result.pr?.number).toBe(182);
+    expect(store.escalation.status).toBe("awaiting_approval");
+    const notice = store.events.find((event) => event.title === "Text notice: could not read who asked for a text");
+    expect(notice).toMatchObject({ kind: "status", status: "failed" });
+    expect(notice?.detail).toMatchObject({ reason: "the provider module could not load" });
+    expect(store.titles("error")).toEqual([]);
+  });
+
+  it("does not fail the run when the text notice rejects with something that is not an Error", async () => {
+    const { store, deps } = setup();
+    deps.notifyDraft = () => Promise.reject(undefined);
+    const result = await run(deps);
+
+    expect(result.status).toBe("awaiting_approval");
+    expect(store.titles("error")).toEqual([]);
+    expect(store.titles().slice(-3)).toEqual([
+      "Text notice: could not read who asked for a text",
+      "Draft PR #182",
+      PAUSE_LABEL,
+    ]);
+  });
+
+  it("texts no one when the run stops before the push or opens no pull request", async () => {
+    let calls = 0;
+    const notifyDraft = async () => {
+      calls += 1;
+      return { state: "done" as const, asked: 0, sent: 0, unconfirmed: 0, taken: 0, reasons: [] };
+    };
+    const stopped = setup();
+    await run({ ...stopped.deps, notifyDraft }, false);
+    const failed = setup({ failBuilder: ["A", "B"] });
+    await run({ ...failed.deps, notifyDraft });
+
+    expect(calls).toBe(0);
+    for (const { store } of [stopped, failed]) {
+      expect(store.titles().some((title) => title.startsWith("Text notice"))).toBe(false);
+    }
+  });
+
   it("stops before the push when asked, and reports what it would have pushed", async () => {
     const { strategy, store, deps } = setup();
     const result = await run(deps, false);

@@ -210,3 +210,25 @@ export function routeMemoryMode(): RouteMemoryMode {
 
 /** Where route memory keeps its files. Defaults to the OS temp dir. */
 export const routeMemoryDir = (): string | null => process.env.LANTERN_ROUTE_MEMORY_DIR || null;
+
+export type SmsSender = { apiKey: string; fromNumber: string; apiUrl: string };
+
+/** The Dial API base, with no slash at the end. */
+export const smsApiUrl = (): string => optional("DIAL_API_URL", "https://api.getdial.ai").replace(/\/+$/, "");
+
+/**
+ * The text message provider, Dial. The key (`sk_live_...`) and the sender number travel together,
+ * so text messages are off unless both are set. The reason names the first variable that is
+ * missing, and the trace repeats it. `DIAL_FROM_NUMBER` is a number of the account in E.164 form,
+ * its id, or its nickname.
+ */
+export function smsSender(): { configured: true; sender: SmsSender } | { configured: false; reason: string } {
+  const apiKey = process.env.DIAL_API_KEY;
+  const fromNumber = process.env.DIAL_FROM_NUMBER;
+  if (!apiKey) return { configured: false, reason: "DIAL_API_KEY is not set" };
+  if (!fromNumber) return { configured: false, reason: "DIAL_FROM_NUMBER is not set" };
+  return {
+    configured: true,
+    sender: { apiKey, fromNumber, apiUrl: smsApiUrl() },
+  };
+}

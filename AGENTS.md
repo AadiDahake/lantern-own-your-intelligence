@@ -195,6 +195,22 @@ a group whose `issue_number` is still null, so `services/worker/steps/pipeline.p
 `feature_request_group.issue_claim` with one conditional update before filing; the loser waits for
 the winner's number and comments on that issue. Section 4 of `docs/contracts.md` has the table.
 
+## A text is sent once, and a phone number is never written down
+
+A text message costs a person's attention and cannot be taken back, and the provider's send call
+has no idempotency key. So the rule in `apps/web/lib/sms` binds everything that sends one: claim
+the person first with one conditional update on `gap_subscriber.notified_at`, send only when the
+claim returned the row, and never repeat a send, not after a timeout and not after a 5xx. A send
+with no confirmed answer keeps its claim. A text goes out under a company's name, so it quotes
+words from outside only through `draftNoticeText`, which removes everything a phone turns into a
+link or a number to call.
+
+A phone number exists in two places: sealed in `gap_subscriber.phone_sealed` (`lib/seal.ts`) while a
+text is owed, and in the request body to the provider. It never goes into a trace row, an error, a
+log line or a reason code, and the provider's own error text is never copied, because it can quote
+the number. `apps/web/lib/dial.ts` is the only module in the web app that calls the provider.
+"The text notice" in section 4 of `docs/contracts.md` has the table and the outcomes.
+
 ## A blip on the wire is not a verdict on the request
 
 Every Supabase and GitHub call in `services/worker` goes through `steps/retry.py`: a dropped
@@ -305,6 +321,7 @@ npm run e2e:guide    # the guided walk on NovaAir, against the widget's mock API
 npm run discover:runner -- --once     # drain the discovery queue; --model codex compiles on the saved Codex login
 LANTERN_CONSOLE_TOKEN=... npm run tail   # the evidence loop as a board in the terminal
 npm run ask:live -- "<question>" [home|trip|seats]   # the live site, answered by this working tree
+npm run dial:live    # the text message provider: the key and the sender number, read-only; --send <number> sends one text
 ```
 
 Screenshots come from `scripts/screenshots.mjs` (Playwright, one private browser per run), never

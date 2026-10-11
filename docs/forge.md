@@ -131,7 +131,7 @@ with `source: "forge"`.
 | 13 | `select.ts`: highest scenarios passed, tie-break on fewest changed files. | `decision` "Selected candidate B, 21/21" |
 | 14 | The winner builds and serves; the URL is health-checked. | `preview` "Preview live" with `{url, candidate}` |
 | 15 | The loser's sandbox is torn down. | `status` "Candidate A torn down" |
-| 16 | Branch pushed, draft pull request opened with the body from `pr.ts`. | `tool` "Pushed ...", `artifact` "Draft PR #182" |
+| 16 | Branch pushed, draft pull request opened with the body from `pr.ts`. Each person who asked for a text about this gap gets it now (`lib/sms`). | `tool` "Pushed ...", `status` "Text notice: ...", `artifact` "Draft PR #182" |
 | 17 | Pause for a person. | `pause` "Approve & merge?" |
 | 18 | On approval: mark ready, squash merge, watch the Vercel deployment (`deploy.ts`), tear the winner down. On rejection: close the pull request, tear the winner down. | `status` rows, `artifact` "Deployment is live" |
 
