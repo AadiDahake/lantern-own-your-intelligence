@@ -334,6 +334,11 @@ describe("thrownMessage", () => {
     expect(thrownMessage({ code: 7 })).toBe("[object Object]");
     expect(thrownMessage(new Error("x".repeat(900)))).toHaveLength(300);
   });
+
+  it("names an error that has no words by its kind, as the worker does", () => {
+    expect(thrownMessage(new Error(""))).toBe("Error");
+    expect(thrownMessage(new TypeError())).toBe("TypeError");
+  });
 });
 
 describe("noticeTrace", () => {

@@ -145,8 +145,26 @@ def release_issue_slot(group_id: str, escalation_id: str) -> None:
 
 # The calls below are about `gap_subscriber`, the people who asked for one text about a gap. A run
 # waits for the text notice, so each of them has a shorter limit than the rest. Every query is
-# scoped to the project, and every query about a person is scoped to the gap too.
+# scoped to the project. Every query about one person is scoped to the gap too, and
+# `forget_stale_subscribers` is for the whole project. `owed_gaps` is not scoped: it reads the
+# gaps of each project for the sweep.
 SUBSCRIBER_TIMEOUT = 10
+
+# The states in which a draft pull request is open: of a gap, and of the run that opened it
+# (`DRAFT_OPEN` in `apps/web/lib/sms/offer.ts`). The text says "a change is drafted and the team
+# reviews it next". The sweep texts an owed person only while the gap and its own run are in one
+# of these states and no person has decided that run. A gap alone keeps `awaiting_approval` after
+# the decision, until the merge and the deployment end; a run alone says `pr_open` before the
+# pull request exists.
+DRAFT_OPEN = ("pr_open", "awaiting_approval")
+_DRAFT_OPEN = f"in.({','.join(DRAFT_OPEN)})"
+
+# The gap's own run (`feature_request_group.escalation_id`): the full run that was attached to
+# the gap last. It is not any run of the gap. A run that only carried a new count can stay at
+# `awaiting_approval` with no approval after it failed (`pipeline.fail`), and an older draft can
+# stay not decided after a newer one was approved. The gap has three relations to `escalation`
+# (this one, `issue_claim`, and `escalation.group_id`), so the select names the column.
+_OWN_RUN = "escalation!escalation_id!inner(id)"
 
 
 def _subscriber(project_id: str, group_id: str, subscriber_id: str) -> dict[str, str]:
@@ -264,6 +282,60 @@ def forget_stale_subscribers(project_id: str, claimed_before: datetime) -> None:
         timeout=SUBSCRIBER_TIMEOUT,
     )
     _check(response)
+
+
+def owed_gaps(limit: int) -> list[dict[str, Any]]:
+    """The gaps with an open draft that no person decided, and a person who is owed a text.
+
+    The gap that was seen longest ago is first. It is one query for the whole deployment, as a
+    runner serves each project. Each inner join keeps a gap only when such a run and such a
+    person exist, and one row of the people is enough to know it. Each pass that follows is
+    scoped to the gap's own project.
+    """
+    response = retry.send(
+        "GET",
+        _url("feature_request_group"),
+        params={
+            "status": _DRAFT_OPEN,
+            "select": f"id,project_id,{_OWN_RUN},gap_subscriber!inner(id)",
+            "escalation.status": _DRAFT_OPEN,
+            "escalation.mode": "eq.full",
+            "escalation.approval": "is.null",
+            "gap_subscriber.notified_at": "is.null",
+            "gap_subscriber.phone_sealed": "not.is.null",
+            "gap_subscriber.limit": "1",
+            "order": "last_seen.asc,id.asc",
+            "limit": str(limit),
+        },
+        headers=_headers(),
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    return _check(response) or []
+
+
+def draft_still_open(project_id: str, group_id: str) -> bool:
+    """True while the draft of one gap is still open and not decided.
+
+    The sweep asks it again just before the pass: the list is read one time, and the pass of a
+    gap can come minutes later.
+    """
+    response = retry.send(
+        "GET",
+        _url("feature_request_group"),
+        params={
+            "id": f"eq.{group_id}",
+            "project_id": f"eq.{project_id}",
+            "status": _DRAFT_OPEN,
+            "select": f"id,{_OWN_RUN}",
+            "escalation.status": _DRAFT_OPEN,
+            "escalation.mode": "eq.full",
+            "escalation.approval": "is.null",
+            "limit": "1",
+        },
+        headers=_headers(),
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    return bool(_check(response))
 
 
 def emit_trace(

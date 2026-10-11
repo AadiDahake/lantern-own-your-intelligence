@@ -1,21 +1,26 @@
 """The one module in the worker that calls Dial, the text message provider.
 
-Documented at https://docs.getdial.ai (`POST /api/v1/messages`, bearer key). It follows the same
-three rules as `apps/web/lib/dial.ts`:
+Documented at https://docs.getdial.ai (`POST /api/v1/messages` and `GET /api/v1/numbers`, bearer
+key). It follows the same three rules as `apps/web/lib/dial.ts`:
 
 - One attempt. The send call has no idempotency key, so a second attempt can be a second text on
-  a person's phone. This is the one call in the worker that does not go through `steps/retry.py`,
-  because that module repeats a call. A caller must not repeat it either.
+  a person's phone. No call in this module goes through `steps/retry.py`, because that module
+  repeats a call. A caller must not repeat a send either.
 - A phone number never leaves this module except in the request body. A result carries a short
   reason code and never the provider's own words or the text of an exception, because an error
   text can quote the number or the key.
 - The body is folded into the basic SMS alphabet before it goes out (`sms_text`), so no caller can
   send a text in the wider encoding by accident.
 
-The call has two parts, and the part a failure comes from decides what it means. A request that
+A send has two parts, and the part a failure comes from decides what it means. A request that
 could not be built was not sent. A request that was handed to the connection may have gone,
 unless the failure itself says that no connection opened. The response is untrusted input and is
 read defensively.
+
+The module has one read-only call too, `provider_answers`. It reads the numbers of the account
+and sends nothing. The sweep asks it before it claims a person (`steps/sms_sweep.py`). It is
+built and read as a send is, and it is made one time for each question: an answer that comes
+only at a second attempt is not a reason to send a text.
 """
 
 from __future__ import annotations
@@ -31,7 +36,7 @@ import requests
 from urllib3.exceptions import ConnectTimeoutError, LocationValueError
 
 from config import SmsSender
-from steps.sms_text import SEND_PATH, is_e164, sms_text
+from steps.sms_text import NUMBERS_PATH, SEND_PATH, is_e164, sms_text
 
 # How long the connection may take to open, how long each read of the answer's first lines may
 # take, and how long the whole body may take after them. A text that is not confirmed in this time
@@ -41,6 +46,10 @@ TIMEOUT_S = 10
 # The provider's answer is a few hundred bytes. A body longer than this is a page from a
 # different server, and it is not read to the end.
 MAX_ANSWER_BYTES = 64 * 1024
+
+# The list of an account's numbers is longer than the answer to a send: a few hundred bytes for
+# each number. For an account with more numbers than this fits, the sweep sends no text.
+MAX_NUMBERS_BYTES = 1024 * 1024
 
 # A code is lower-case letters and underscores. Anything else could be free text, or a phone
 # number, and is not used.
@@ -100,7 +109,7 @@ def _led_to_by(error: BaseException, kind: type[BaseException]) -> bool:
     return False
 
 
-def _failure(error: Exception) -> tuple[str, bool]:
+def _failure(error: Exception, unnamed: str = "send_failed") -> tuple[str, bool]:
     """Why a request that was handed to the connection got no answer.
 
     Returns a short code, and whether the request can have left. A few failures say by themselves
@@ -109,7 +118,7 @@ def _failure(error: Exception) -> tuple[str, bool]:
     trusted (the request is written only after that check), and an address or a proxy setting
     that no connection could be made for. Every other failure can come after the provider read
     the request. That includes an answer with headers that cannot be read, and it includes a
-    failure that neither library names.
+    failure that neither library names. `unnamed` is the code for that last one.
     """
     # urllib3 raises this error, and the two that extend it (refused, no such host), only while it
     # opens a socket.
@@ -126,10 +135,10 @@ def _failure(error: Exception) -> tuple[str, bool]:
         return "timeout", True
     if isinstance(error, requests.RequestException):
         return "network", True
-    return "send_failed", True
+    return unnamed, True
 
 
-def _read_answer(response: requests.Response, limit_s: float) -> Any:
+def _read_answer(response: requests.Response, limit_s: float, max_bytes: int = MAX_ANSWER_BYTES) -> Any:
     """The JSON of the answer, or None when it is not JSON, is too long or does not come in time.
 
     The limit is held by a second thread that shuts the read side of the socket. A test between
@@ -155,7 +164,7 @@ def _read_answer(response: requests.Response, limit_s: float) -> Any:
             if not chunk:
                 break
             body += chunk
-            if len(body) > MAX_ANSWER_BYTES:
+            if len(body) > max_bytes:
                 return None
         # What came before the limit is not the whole answer, even when it can be parsed.
         return None if late.is_set() else json.loads(bytes(body))
@@ -163,6 +172,26 @@ def _read_answer(response: requests.Response, limit_s: float) -> Any:
         return None
     finally:
         watchdog.cancel()
+
+
+def _build(
+    session: requests.Session, sender: SmsSender, method: str, path: str, body: dict[str, Any] | None = None
+) -> tuple[requests.PreparedRequest, requests.adapters.BaseAdapter, dict[str, Any]]:
+    """The request, the adapter that carries it, and the settings of the environment.
+
+    No connection is open yet. It raises `InvalidHeader` or `UnicodeError` for a key that cannot
+    be a header, and a different error for a base address that cannot be used.
+    """
+    authorization = f"Bearer {sender.api_key}"
+    # A header goes on the wire as Latin-1, and the connection finds out too late.
+    authorization.encode("latin-1")
+    request = session.prepare_request(
+        requests.Request(method, f"{sender.api_url}{path}", headers={"Authorization": authorization}, json=body)
+    )
+    adapter = session.get_adapter(str(request.url))
+    # The proxy and the certificates of the environment, as for every other call here.
+    settings = session.merge_environment_settings(request.url, {}, True, None, None)
+    return request, adapter, settings
 
 
 def send_sms(sender: SmsSender, to: str, body: str, timeout_s: float = TIMEOUT_S) -> SmsResult:
@@ -177,21 +206,14 @@ def send_sms(sender: SmsSender, to: str, body: str, timeout_s: float = TIMEOUT_S
         # Part one: build the request. No connection is open yet, so a failure here is "nothing
         # was sent", and it is not about this recipient.
         try:
-            authorization = f"Bearer {sender.api_key}"
-            # A header goes on the wire as Latin-1, and the connection finds out too late.
-            authorization.encode("latin-1")
-            request = session.prepare_request(
-                requests.Request(
-                    "POST",
-                    f"{sender.api_url}{SEND_PATH}",
-                    headers={"Authorization": authorization},
-                    # No `channel`: the number's own default applies, so a standard number sends an SMS.
-                    json={"to": to, "fromNumber": sender.from_number, "body": text},
-                )
+            request, adapter, settings = _build(
+                session,
+                sender,
+                "POST",
+                SEND_PATH,
+                # No `channel`: the number's own default applies, so a standard number sends an SMS.
+                {"to": to, "fromNumber": sender.from_number, "body": text},
             )
-            adapter = session.get_adapter(str(request.url))
-            # The proxy and the certificates of the environment, as for every other call here.
-            settings = session.merge_environment_settings(request.url, {}, True, None, None)
         except (requests.exceptions.InvalidHeader, UnicodeError):
             return SmsResult("refused", "bad_api_key", for_all=True)
         except Exception:  # noqa: BLE001 - no scheme, an unknown scheme, no host
@@ -230,3 +252,34 @@ def send_sms(sender: SmsSender, to: str, body: str, timeout_s: float = TIMEOUT_S
     # Every 4xx and every other redirect are "nothing was sent". A redirect, the key and the
     # credit are not about this recipient.
     return SmsResult("refused", reason, for_all=status < 400 or status in (401, 402))
+
+
+def provider_answers(sender: SmsSender, timeout_s: float = TIMEOUT_S) -> tuple[bool, str]:
+    """Reads the numbers of the account, and says if the provider answered as itself.
+
+    Read-only: it sends no text. `(True, "")` only for the provider's own answer, a 2xx with a
+    list under `numbers`. Else `(False, reason)`, and the reason is a short code. One attempt.
+    Never raises.
+    """
+    try:
+        with requests.Session() as session:
+            try:
+                request, adapter, settings = _build(session, sender, "GET", NUMBERS_PATH)
+            except (requests.exceptions.InvalidHeader, UnicodeError):
+                return False, "bad_api_key"
+            except Exception:  # noqa: BLE001 - no scheme, an unknown scheme, no host
+                return False, "bad_api_url"
+            # The adapter is called directly, as for a send, so a redirect is not followed. The
+            # page that a redirect lands on can answer 200, and it is not the provider.
+            with adapter.send(request, timeout=timeout_s, **settings) as response:
+                status = response.status_code
+                answer = _read_answer(response, timeout_s, MAX_NUMBERS_BYTES)
+    except Exception as error:  # noqa: BLE001 - a call that fails is a provider that did not answer
+        return False, _failure(error, unnamed="check_failed")[0]
+
+    if not 200 <= status < 300:
+        return False, _reason_for(status, answer)
+    # A 200 from a different server (a wrong base address, a proxy's page) is not the provider.
+    if not isinstance(answer, dict) or not isinstance(answer.get("numbers"), list):
+        return False, "unreadable_answer"
+    return True, ""

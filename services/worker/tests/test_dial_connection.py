@@ -7,6 +7,9 @@ Nothing leaves the machine.
 
 The rule each test holds: `refused` only when nothing can have been sent, because a refused text
 is sent again later.
+
+The read-only question that the sweep asks (`provider_answers`) is at the end. Its rule: "yes"
+only for the provider's own answer, because a "yes" is followed by a claim and a text.
 """
 
 from __future__ import annotations
@@ -38,6 +41,9 @@ ANA = "+14155550101"
 # A stream of such blocks is valid for ever and never gives the reader a byte.
 GZIP_START = bytes.fromhex("1f8b0800000000000003")
 EMPTY_BLOCK = bytes.fromhex("000000ffff")
+
+# What the provider answers to the read-only question: the numbers of the account.
+NUMBERS = b'{"numbers": [{"id": "num_local", "number": "+14155550100", "capabilities": ["sms"]}]}'
 
 
 class _Provider(ThreadingHTTPServer):
@@ -74,7 +80,20 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802 - the base class's name
         self.server.seen.append(("GET", self.path, ""))
-        self._answer(200, b"<html>Welcome</html>", "text/html")
+        mode = self.server.mode
+        if self.path != "/api/v1/numbers":
+            # The page that a redirect points to. A client must not come here.
+            self._answer(200, b"<html>Welcome</html>", "text/html")
+        elif mode == "redirect":
+            self._answer(302, b"", Location="/landing")
+        elif mode == "drop":
+            self.close_connection = True
+            self.connection.shutdown(socket.SHUT_RDWR)
+        elif mode == "hang":
+            time.sleep(1.0)
+            self._answer(200, NUMBERS)
+        else:
+            self._answer(200, NUMBERS)
 
     def do_POST(self) -> None:  # noqa: N802 - the base class's name
         raw = self.rfile.read(int(self.headers.get("Content-Length") or 0)).decode("utf-8")
@@ -375,4 +394,53 @@ def test_a_certificate_that_is_not_trusted_is_refused_because_no_request_was_wri
         result = dial.send_sms(sender, ANA, "hello")
 
     assert result == SmsResult("refused", "untrusted_certificate", for_all=True)
+    assert server.seen == []
+
+
+def test_a_real_question_is_one_get_and_sends_no_text(provider: _Provider) -> None:
+    assert dial.provider_answers(_sender(provider.url)) == (True, "")
+    assert provider.seen == [("GET", "/api/v1/numbers", "")]
+
+
+def test_a_real_redirect_of_the_question_is_no_answer_and_is_not_followed(provider: _Provider) -> None:
+    provider.mode = "redirect"
+    assert dial.provider_answers(_sender(provider.url)) == (False, "http_302")
+    assert _requests(provider) == [("GET", "/api/v1/numbers")]
+
+
+def test_a_closed_port_is_a_provider_that_does_not_answer() -> None:
+    sender = _sender(f"http://127.0.0.1:{_closed_port()}")
+    assert dial.provider_answers(sender) == (False, "unreachable")
+
+
+def test_a_question_whose_answer_does_not_start_in_time_is_no_answer(provider: _Provider) -> None:
+    provider.mode = "hang"
+    assert dial.provider_answers(_sender(provider.url), timeout_s=0.2) == (False, "timeout")
+    # One attempt: the provider saw one request.
+    assert _requests(provider) == [("GET", "/api/v1/numbers")]
+
+
+def test_a_connection_that_breaks_before_the_answer_to_the_question_is_no_answer(provider: _Provider) -> None:
+    provider.mode = "drop"
+    assert dial.provider_answers(_sender(provider.url)) == (False, "network")
+    assert len(provider.seen) == 1
+
+
+@pytest.mark.parametrize("api_key", ["test-dial\nkey", "test-dial-key\u200b"])
+def test_a_key_that_cannot_be_a_header_asks_nothing(provider: _Provider, api_key: str) -> None:
+    assert dial.provider_answers(_sender(provider.url, api_key)) == (False, "bad_api_key")
+    assert provider.seen == []
+
+
+def test_a_certificate_that_is_not_trusted_is_a_provider_that_does_not_answer(tmp_path: Path) -> None:
+    key_file, certificate_file = _self_signed(tmp_path)
+    server = _Provider()
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certificate_file, key_file)
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+
+    for running in _serve(server):
+        answer = dial.provider_answers(_sender(f"https://127.0.0.1:{running.server_address[1]}"))
+
+    assert answer == (False, "untrusted_certificate")
     assert server.seen == []

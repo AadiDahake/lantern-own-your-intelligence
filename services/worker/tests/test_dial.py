@@ -1,7 +1,8 @@
 """The worker's text message client: one attempt, three results, and nothing of the person in them.
 
 The provider is mocked with `responses`, so each test here is about how an answer is read. What a
-real connection raises when it fails is in `test_dial_connection.py`.
+real connection raises when it fails is in `test_dial_connection.py`. The read-only question that
+the sweep asks (`provider_answers`) is at the end.
 """
 
 from __future__ import annotations
@@ -255,3 +256,154 @@ def test_the_result_never_carries_the_number_the_key_or_the_providers_words() ->
 def test_the_key_is_not_in_the_repr_of_the_sender() -> None:
     assert "test-dial-key" not in repr(SENDER)
     assert "test-dial-key" not in str(SENDER)
+
+
+# From here: the read-only question that the sweep asks before it claims a person.
+
+NUMBERS = "https://api.getdial.ai/api/v1/numbers"
+
+
+@responses.activate
+def test_the_question_is_one_get_with_the_key_and_no_body() -> None:
+    responses.get(NUMBERS, json={"numbers": [{"id": "num_1", "number": "+14155550100", "capabilities": ["sms"]}]})
+
+    assert dial.provider_answers(SENDER) == (True, "")
+
+    assert len(responses.calls) == 1
+    request = responses.calls[0].request
+    assert request.method == "GET"
+    assert request.url == NUMBERS
+    assert request.headers["Authorization"] == "Bearer test-dial-key"
+    assert request.body is None
+    assert "Content-Type" not in request.headers
+
+
+@responses.activate
+def test_an_account_with_no_numbers_is_still_the_provider_that_answers() -> None:
+    responses.get(NUMBERS, json={"numbers": []})
+    assert dial.provider_answers(SENDER) == (True, "")
+
+
+@responses.activate
+def test_a_list_of_numbers_that_is_longer_than_the_answer_to_a_send_is_still_an_answer() -> None:
+    """The list has a few hundred bytes for each number, so the question has a limit of its own."""
+    numbers = [{"id": f"num_{index}", "number": f"+1415555{index:04d}", "nickname": "x" * 200} for index in range(600)]
+    body = json.dumps({"numbers": numbers}).encode()
+    assert dial.MAX_ANSWER_BYTES < len(body) < dial.MAX_NUMBERS_BYTES
+    responses.get(NUMBERS, status=200, body=body, content_type="application/json")
+    assert dial.provider_answers(SENDER) == (True, "")
+
+
+@pytest.mark.parametrize(
+    ("status", "answer", "reason"),
+    [
+        (401, {"error": "Missing or invalid API key."}, "http_401"),
+        (402, {"error": "Insufficient Dial credit.", "code": "insufficient_credit"}, "insufficient_credit"),
+        (403, {"error": "Forbidden"}, "http_403"),
+        (404, {"error": "Not found"}, "http_404"),
+        (429, {"error": {"code": "rate_limited", "message": "Slow down"}}, "rate_limited"),
+        (500, {"error": "upstream"}, "http_500"),
+        (503, {"error": "upstream"}, "http_503"),
+        # A status that is not 2xx is "no", whatever the body holds.
+        (500, {"numbers": []}, "http_500"),
+    ],
+)
+@responses.activate
+def test_a_status_that_is_not_2xx_is_no_answer_and_the_question_is_not_asked_again(
+    status: int, answer: Any, reason: str
+) -> None:
+    responses.get(NUMBERS, status=status, json=answer)
+    assert dial.provider_answers(SENDER) == (False, reason)
+    assert len(responses.calls) == 1
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"body": "<html>Welcome</html>", "content_type": "text/html"},
+        {"json": {"ok": True}},
+        {"json": {"numbers": "none"}},
+        {"json": {"numbers": {"id": "num_1"}}},
+        {"json": [{"id": "num_1"}]},
+        {"body": ""},
+        {"body": b"\x1f\x8b this is not gzip", "headers": {"Content-Encoding": "gzip"}},
+        {"body": b'{"numbers": [], "padding": "' + b"x" * dial.MAX_NUMBERS_BYTES + b'"}'},
+    ],
+)
+@responses.activate
+def test_a_2xx_that_is_not_the_providers_answer_is_no_answer(answer: dict[str, Any]) -> None:
+    """A wrong base address that lands on a page is not a provider that takes a text."""
+    responses.get(NUMBERS, status=200, **answer)
+    assert dial.provider_answers(SENDER) == (False, "unreadable_answer")
+    assert len(responses.calls) == 1
+
+
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+@responses.activate
+def test_a_redirect_of_the_question_is_no_answer_and_is_never_followed(status: int) -> None:
+    responses.get(NUMBERS, status=status, headers={"Location": "https://elsewhere.example/landing"})
+    landing = responses.get("https://elsewhere.example/landing", json={"numbers": []})
+
+    assert dial.provider_answers(SENDER) == (False, f"http_{status}")
+    assert len(responses.calls) == 1 and landing.call_count == 0
+
+
+@pytest.mark.parametrize(
+    ("raised", "reason"),
+    [
+        (requests.exceptions.ReadTimeout("read timed out"), "timeout"),
+        (requests.exceptions.ConnectTimeout("connect timed out"), "unreachable"),
+        (requests.exceptions.ConnectionError("Connection aborted."), "network"),
+        (requests.exceptions.SSLError("bad record"), "network"),
+        (LocationParseError("api..getdial.ai, label empty or too long"), "bad_api_url"),
+        (requests.exceptions.InvalidSchema("Missing dependencies for SOCKS support."), "bad_proxy"),
+        # Not a failure the libraries name, and no text was sent, so it is not `send_failed`.
+        (ValueError(f"something broke with test-dial-key near {ANA}"), "check_failed"),
+    ],
+)
+@responses.activate
+def test_a_question_with_no_answer_is_asked_one_time_and_does_not_raise(raised: Exception, reason: str) -> None:
+    responses.get(NUMBERS, body=raised)
+    assert dial.provider_answers(SENDER) == (False, reason)
+    assert len(responses.calls) == 1
+
+
+@pytest.mark.parametrize("api_url", ["api.getdial.ai", "ftp://api.getdial.ai", "http://", "://nothing"])
+@responses.activate
+def test_a_base_address_that_is_not_a_url_is_no_answer(api_url: str) -> None:
+    sender = SmsSender(api_key="test-dial-key", from_number="+14155550100", api_url=api_url)
+    assert dial.provider_answers(sender) == (False, "bad_api_url")
+    assert len(responses.calls) == 0
+
+
+@pytest.mark.parametrize("api_key", ["test-dial\nkey", "test-dial-key\u200b"])
+@responses.activate
+def test_a_key_that_cannot_be_a_header_is_no_answer_and_nothing_is_asked(api_key: str) -> None:
+    responses.get(NUMBERS, json={"numbers": []})
+    sender = SmsSender(api_key=api_key, from_number="+14155550100", api_url="https://api.getdial.ai")
+    assert dial.provider_answers(sender) == (False, "bad_api_key")
+    assert len(responses.calls) == 0
+
+
+@responses.activate
+def test_the_reason_of_the_question_never_carries_a_number_the_key_or_the_providers_words() -> None:
+    responses.get(NUMBERS, status=400, json={"error": f"No such number {ANA}", "code": f"blocked {ANA}"})
+    responses.get(NUMBERS, status=429, json={"error": {"code": "+14155550101", "message": ANA}})
+    responses.get(NUMBERS, status=400, json={"code": "Has Capitals And Spaces"})
+    responses.get(NUMBERS, status=503, body=f"upstream failed for {ANA}")
+    responses.get(NUMBERS, status=200, json={"numbers": f"none for {ANA}"})
+    responses.get(NUMBERS, body=requests.exceptions.ConnectionError(f"reset for {ANA} with test-dial-key"))
+
+    answers = [dial.provider_answers(SENDER) for _ in range(6)]
+
+    assert answers == [
+        (False, "http_400"),
+        (False, "http_429"),
+        (False, "http_400"),
+        (False, "http_503"),
+        (False, "unreadable_answer"),
+        (False, "network"),
+    ]
+    for _ok, reason in answers:
+        assert "4155550101" not in reason and "test-dial-key" not in reason
+        assert "No such" not in reason and "upstream" not in reason

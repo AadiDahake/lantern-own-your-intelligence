@@ -218,6 +218,14 @@ both text message variables, and the web app offers the text on the widget's gap
 the runner says so, because this process sends that text and the web app cannot see its
 environment.
 
+With both variables the runner also starts one sweep every 5 minutes (`lib/sms/sweep.ts`), the
+first one 5 minutes after it starts: a later pass for each person who is still owed a text while
+a draft is open and no person has decided it, because the pass at the draft runs one time. It
+reads the drafts of each engine. The sweep asks the provider one read-only question before it
+claims a person, and it waits longer after each try that cannot work now. "The text notice" in section 4 of
+`docs/contracts.md` has the rules. This sweep is not `npm run forge:sweep`, which shuts down
+devboxes.
+
 | Queue | A row joins it when | The runner claims it by | Then |
 |---|---|---|---|
 | A run to build | `POST /api/opportunities/:groupId/forge` writes `engine='forge'`, `status='queued'` and the `capability_ir` it will build | moving `queued` to `drafting`, conditional on it still being `queued` | `runForge` from step 8, ending on the `pause` for a person |

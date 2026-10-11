@@ -223,8 +223,9 @@ export const smsApiUrl = (): string => optional("DIAL_API_URL", "https://api.get
  * its id, or its nickname.
  */
 export function smsSender(): { configured: true; sender: SmsSender } | { configured: false; reason: string } {
-  const apiKey = process.env.DIAL_API_KEY;
-  const fromNumber = process.env.DIAL_FROM_NUMBER;
+  // A value of spaces is blank, as it is for the worker.
+  const apiKey = process.env.DIAL_API_KEY?.trim();
+  const fromNumber = process.env.DIAL_FROM_NUMBER?.trim();
   if (!apiKey) return { configured: false, reason: "DIAL_API_KEY is not set" };
   if (!fromNumber) return { configured: false, reason: "DIAL_FROM_NUMBER is not set" };
   return {

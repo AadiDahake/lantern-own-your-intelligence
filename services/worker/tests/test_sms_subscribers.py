@@ -1,7 +1,8 @@
 """The people who asked for a text, in the database, and the whole notice from the environment.
 
 PostgREST and the provider are mocked with `responses`, which also proves each query's filters
-and the order a run makes its calls in. The rule itself is in `test_sms_notice.py`.
+and the order a run makes its calls in. The rule itself is in `test_sms_notice.py`. The one query
+of the sweep is here too, and the sweep itself is in `test_sms_sweep.py`.
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import requests
 import responses
 from responses import matchers
 
-from steps import retry, seal, sms_notice
+from steps import db, retry, seal, sms_notice
 from steps.sms_notice import GapSubscribers, NoticeOutcome, Owed
 
 TEXT = (
@@ -176,6 +177,111 @@ def test_a_database_error_is_raised_so_the_rule_can_refuse_to_send(store: GapSub
     responses.get(f"{REST}/gap_subscriber", status=404, json={"code": "PGRST205", "message": "no such table"})
     with pytest.raises(RuntimeError, match="PostgREST 404"):
         store.owed(201)
+
+
+# The list of the sweep (`steps/sms_sweep.py`): the gaps with an open draft that no person has
+# decided, and a person who is owed a text. The gap says that the pull request is open, and the
+# gap's own run (`escalation_id`) is a full run that says the same and has no approval. The gap
+# alone keeps its state after the decision, and any run of the gap is too wide: a run that only
+# carried a count can stay at `awaiting_approval` after it failed.
+OWED_GAPS = {
+    "status": "in.(pr_open,awaiting_approval)",
+    "select": "id,project_id,escalation!escalation_id!inner(id),gap_subscriber!inner(id)",
+    "escalation.status": "in.(pr_open,awaiting_approval)",
+    "escalation.mode": "eq.full",
+    "escalation.approval": "is.null",
+    "gap_subscriber.notified_at": "is.null",
+    "gap_subscriber.phone_sealed": "not.is.null",
+    "gap_subscriber.limit": "1",
+    "order": "last_seen.asc,id.asc",
+    "limit": "100",
+}
+
+
+@responses.activate
+def test_the_gaps_that_are_owed_a_text_are_one_query_with_the_shorter_time_limit() -> None:
+    rows = [
+        {"id": "g1", "project_id": "p1", "escalation": {"id": "run-1"}, "gap_subscriber": [{"id": "s1"}]},
+        # A gap of a different project.
+        {"id": "g2", "project_id": "p2", "escalation": {"id": "run-9"}, "gap_subscriber": [{"id": "s7"}]},
+    ]
+    responses.get(
+        f"{REST}/feature_request_group",
+        json=rows,
+        match=[
+            # The matcher fails for a parameter that is missing and for one that is not listed.
+            matchers.query_param_matcher(OWED_GAPS),
+            matchers.request_kwargs_matcher({"timeout": db.SUBSCRIBER_TIMEOUT}),
+        ],
+    )
+
+    # Each row comes back as PostgREST gave it. The sweep reads the gap, the project and the run from it.
+    assert db.owed_gaps(100) == rows
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_the_list_of_gaps_asks_for_the_limit_that_the_caller_gives() -> None:
+    responses.get(f"{REST}/feature_request_group", json=[])
+    assert db.owed_gaps(7) == []
+    assert dict(responses.calls[0].request.params) == {**OWED_GAPS, "limit": "7"}
+
+
+@responses.activate
+def test_the_list_of_gaps_is_read_again_after_a_blip_because_a_read_changes_nothing() -> None:
+    responses.get(f"{REST}/feature_request_group", status=503, json={"message": "not now"})
+    responses.get(f"{REST}/feature_request_group", json=[{"id": "g1", "project_id": "p1", "escalation": {"id": "run-1"}}])
+
+    assert db.owed_gaps(100) == [{"id": "g1", "project_id": "p1", "escalation": {"id": "run-1"}}]
+    assert len(responses.calls) == 2
+
+
+@responses.activate
+def test_a_list_of_gaps_that_cannot_be_read_is_raised_so_the_sweep_can_say_why() -> None:
+    responses.get(f"{REST}/feature_request_group", status=404, json={"code": "PGRST205", "message": "no such table"})
+    with pytest.raises(RuntimeError, match="PostgREST 404"):
+        db.owed_gaps(100)
+
+
+STILL_OPEN = {
+    "id": "eq.g1",
+    "project_id": "eq.p1",
+    "status": "in.(pr_open,awaiting_approval)",
+    "select": "id,escalation!escalation_id!inner(id)",
+    "escalation.status": "in.(pr_open,awaiting_approval)",
+    "escalation.mode": "eq.full",
+    "escalation.approval": "is.null",
+    "limit": "1",
+}
+
+
+@responses.activate
+def test_a_draft_is_still_open_while_the_gap_and_a_run_of_it_say_so_and_no_person_decided() -> None:
+    responses.get(
+        f"{REST}/feature_request_group",
+        json=[{"id": "g1", "escalation": {"id": "run-1"}}],
+        match=[
+            matchers.query_param_matcher(STILL_OPEN),
+            matchers.request_kwargs_matcher({"timeout": db.SUBSCRIBER_TIMEOUT}),
+        ],
+    )
+    assert db.draft_still_open("p1", "g1") is True
+    assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_a_draft_is_not_open_when_no_row_comes_back() -> None:
+    """The draft was decided, or the gap is gone, or it is a gap of a different project."""
+    responses.get(f"{REST}/feature_request_group", json=[])
+    assert db.draft_still_open("p1", "g1") is False
+    assert dict(responses.calls[0].request.params) == STILL_OPEN
+
+
+@responses.activate
+def test_a_draft_that_cannot_be_asked_about_is_raised_so_no_pass_is_made_on_a_guess() -> None:
+    responses.get(f"{REST}/feature_request_group", status=400, json={"message": "no such relation"})
+    with pytest.raises(RuntimeError, match="PostgREST 400"):
+        db.draft_still_open("p1", "g1")
 
 
 DIAL = "https://api.getdial.ai/api/v1/messages"

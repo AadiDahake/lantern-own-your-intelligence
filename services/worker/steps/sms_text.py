@@ -5,7 +5,7 @@ the same input. `packages/shared/test/fixtures/sms-text.json` holds inputs and t
 one becomes; `tests/test_sms_text.py` runs every one of them against this module, and the shared
 package runs them against the TypeScript. Change a rule in both files and in the fixture together.
 
-The limits and the path are those of `SMS` in `@lantern/shared`. The reason for each one is in
+The limits and the paths are those of `SMS` in `@lantern/shared`. The reason for each one is in
 `docs/contracts.md` section 5.
 
 One difference between the two copies is known: an accented letter is folded with the Unicode
@@ -22,6 +22,9 @@ import unicodedata
 
 # `POST`: send one message. The call has no idempotency key, so a caller never repeats it.
 SEND_PATH = "/api/v1/messages"
+# `GET`: the numbers of the account. The sweep reads it before it claims a person, and it sends
+# nothing.
+NUMBERS_PATH = "/api/v1/numbers"
 # The longest body the provider takes when each character is in the basic SMS alphabet.
 MAX_CHARS = 1530
 # The longest gap title a notice quotes. It keeps the notice at two segments.

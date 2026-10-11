@@ -1,0 +1,2757 @@
+{
+  "about": [
+    "The sweep for owed texts, as scenarios that both runtimes run: apps/web/lib/sms/sweep.ts and services/worker/steps/sms_sweep.py.",
+    "A scenario is one runner's sweeper. Each step is one sweep at the minute `at`.",
+    "`owed` is what the list of gaps answers: gap ids, or {error} when the read fails. It is left out when the sweep must not read.",
+    "`provider` is what the provider says to the read-only question: `ok`, or a reason code. The default is `ok`.",
+    "`passes` names the outcome of the pass for each gap, from `outcomes`. `refusedForAll` lists the gaps whose pass ended at a refusal that is not about one person.",
+    "`sayFails` lists the gaps whose row cannot be written in this step.",
+    "`expect.passed` lists the gaps that got a pass, in the order of the passes. `expect.said` lists each row that was written: the gap, the title, the status. `expect.sayFailed` lists each row that could not be written.",
+    "The detail of a row is {notice: draft_sms, pass: later} and the outcome of the pass, or {state: waiting, reason} for the row about the provider."
+  ],
+  "titles": {
+    "waiting": "Text notice, later pass: not sent yet, the text message provider did not answer",
+    "unread": "Text notice, later pass: could not read who is owed a text"
+  },
+  "outcomes": {
+    "one_sent": {
+      "state": "done",
+      "asked": 1,
+      "sent": 1,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": []
+    },
+    "two_sent": {
+      "state": "done",
+      "asked": 2,
+      "sent": 2,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": []
+    },
+    "refused": {
+      "state": "done",
+      "asked": 1,
+      "sent": 0,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": [
+        "http_400"
+      ]
+    },
+    "no_answer": {
+      "state": "done",
+      "asked": 2,
+      "sent": 0,
+      "unconfirmed": 1,
+      "taken": 0,
+      "reasons": [
+        "timeout"
+      ]
+    },
+    "no_answer_last": {
+      "state": "done",
+      "asked": 1,
+      "sent": 0,
+      "unconfirmed": 1,
+      "taken": 0,
+      "reasons": [
+        "http_503"
+      ]
+    },
+    "sent_then_no_answer": {
+      "state": "done",
+      "asked": 3,
+      "sent": 1,
+      "unconfirmed": 1,
+      "taken": 0,
+      "reasons": [
+        "timeout"
+      ]
+    },
+    "one_of_two": {
+      "state": "done",
+      "asked": 2,
+      "sent": 1,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": [
+        "http_400"
+      ]
+    },
+    "pass_limit": {
+      "state": "done",
+      "asked": 201,
+      "sent": 200,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": [
+        "pass_limit"
+      ]
+    },
+    "taken": {
+      "state": "done",
+      "asked": 0,
+      "sent": 0,
+      "unconfirmed": 0,
+      "taken": 2,
+      "reasons": []
+    },
+    "no_one": {
+      "state": "done",
+      "asked": 0,
+      "sent": 0,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": []
+    },
+    "unread": {
+      "state": "failed",
+      "reason": "PostgREST 503: upstream"
+    },
+    "no_credit": {
+      "state": "done",
+      "asked": 2,
+      "sent": 0,
+      "unconfirmed": 0,
+      "taken": 0,
+      "reasons": [
+        "insufficient_credit"
+      ]
+    }
+  },
+  "scenarios": [
+    {
+      "name": "no gap has a person who is owed, so the provider is not asked",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "the provider is asked first, nothing is sent while it does not answer, and one row says so, whatever the reason of each try is",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "provider": "http_503",
+          "expect": {
+            "result": {
+              "state": "provider",
+              "reason": "http_503",
+              "gaps": 2
+            },
+            "read": true,
+            "checked": true,
+            "passed": [],
+            "said": [
+              [
+                "g1",
+                "waiting",
+                "failed"
+              ],
+              [
+                "g2",
+                "waiting",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: nothing sent for 2 gaps, the text message provider did not answer (http_503)"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "provider": "http_503",
+          "expect": {
+            "result": {
+              "state": "provider",
+              "reason": "http_503",
+              "gaps": 2
+            },
+            "read": true,
+            "checked": true,
+            "passed": [],
+            "said": [],
+            "line": "text sweep: nothing sent for 2 gaps, the text message provider did not answer (http_503)"
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "provider": "timeout",
+          "expect": {
+            "result": {
+              "state": "provider",
+              "reason": "timeout",
+              "gaps": 2
+            },
+            "read": true,
+            "checked": true,
+            "passed": [],
+            "said": [],
+            "line": "text sweep: nothing sent for 2 gaps, the text message provider did not answer (timeout)"
+          }
+        },
+        {
+          "at": 15,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "one_sent",
+            "g2": "two_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 3,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1",
+              "g2"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ],
+              [
+                "g2",
+                "Text notice, later pass: 2 of 2 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 3 texts sent in 2 passes, 0 gaps still with a person who is owed"
+          }
+        },
+        {
+          "at": 20,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "a text with no confirmed answer stops the sweep, the next send waits 10 minutes, then 20, a different gap is the next try, and a confirmed text ends the wait",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2",
+            "g3"
+          ],
+          "passes": {
+            "g1": "no_answer"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 3,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 2 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 3 gaps still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        },
+        {
+          "at": 9,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g2",
+            "g3"
+          ],
+          "passes": {
+            "g2": "no_answer_last"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 2,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g2"
+            ],
+            "said": [
+              [
+                "g2",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 2 gaps still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        },
+        {
+          "at": 29,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1",
+            "g3"
+          ],
+          "passes": {
+            "g3": "two_sent",
+            "g1": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 3,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g3",
+              "g1"
+            ],
+            "said": [
+              [
+                "g3",
+                "Text notice, later pass: 2 of 2 sent",
+                "ok"
+              ],
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 3 texts sent in 2 passes, 0 gaps still with a person who is owed"
+          }
+        },
+        {
+          "at": 35,
+          "owed": [
+            "g4"
+          ],
+          "passes": {
+            "g4": "no_answer_last"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 0,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g4"
+            ],
+            "said": [
+              [
+                "g4",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 0 gaps still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        },
+        {
+          "at": 44,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 45,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "a number that is refused each time makes its gap wait by itself, says so one time, and holds back no other gap",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "refused",
+            "g2": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 1,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1",
+              "g2"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ],
+              [
+                "g2",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 2 passes, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g5"
+          ],
+          "passes": {
+            "g1": "refused",
+            "g5": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 1,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g5",
+              "g1"
+            ],
+            "said": [
+              [
+                "g5",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 2 passes, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 15,
+          "owed": [
+            "g1",
+            "g6"
+          ],
+          "passes": {
+            "g6": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g6"
+            ],
+            "said": [
+              [
+                "g6",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 29,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 69,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 70,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the wait of a gap is 2 times as long each time and stops at 6 hours",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 9,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 29,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 69,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 70,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 149,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 150,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 309,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 310,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 629,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 630,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 989,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 990,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 1349,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 1350,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a pass that confirmed a text and left people is due again at the next sweep",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "pass_limit"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 200,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 200 of 201 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 200 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a pass that confirmed a text starts the wait of its gap from nothing: the next wait is 10 minutes, not 20",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "one_of_two"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 2 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 15,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 24,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 25,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a gap whose list of people cannot be read waits, and says so one time",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "unread"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "unread",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "unread"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the list of gaps cannot be read, so nothing is asked and nothing is sent",
+      "steps": [
+        {
+          "at": 0,
+          "owed": {
+            "error": "PostgREST 503: upstream"
+          },
+          "expect": {
+            "result": {
+              "state": "failed",
+              "reason": "PostgREST 503: upstream"
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": "text sweep: failed (PostgREST 503: upstream)"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a row that could not be written is written with the next pass",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "sayFails": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "sayFailed": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a gap that is missing from one list keeps its wait and what was said: a different runner can hold its one person at that moment",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 6,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a gap that no list had for exactly 6 hours is still remembered, and the 6 hours start again when it is missing again",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 365,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 366,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 385,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 386,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 400,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 426,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a gap that no list had for more than 6 hours is forgotten, with its wait and with what was said",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 366,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 367,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 376,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 377,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a sweep that read nothing for 7 hours forgets nothing at its first list: the 6 hours start at the first list without the gap",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 420,
+          "owed": [],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 0
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 421,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 440,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 441,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the gaps that are due are tried by their own wait, the shortest first, not by the order of the list and not by the time that the wait ended",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 25,
+          "owed": [
+            "g1",
+            "g3"
+          ],
+          "passes": {
+            "g3": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 2,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g3"
+            ],
+            "said": [
+              [
+                "g3",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 2 gaps still with a person who is owed"
+          }
+        },
+        {
+          "at": 35,
+          "owed": [
+            "g1",
+            "g3"
+          ],
+          "passes": {
+            "g1": "refused",
+            "g3": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 0,
+              "left": 2,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g3",
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 2 passes, 2 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a gap whose texts get no confirmed answer is not the first try after the wait, so it holds back no other gap",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2",
+            "g3"
+          ],
+          "passes": {
+            "g1": "no_answer"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 3,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 2 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 3 gaps still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g2",
+            "g3"
+          ],
+          "passes": {
+            "g2": "one_sent",
+            "g3": "two_sent",
+            "g1": "no_answer"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 3,
+              "sent": 3,
+              "left": 1,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g2",
+              "g3",
+              "g1"
+            ],
+            "said": [
+              [
+                "g2",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ],
+              [
+                "g3",
+                "Text notice, later pass: 2 of 2 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 3 texts sent in 3 passes, 1 gap still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        },
+        {
+          "at": 19,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 20,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 29,
+          "owed": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "idle",
+              "owed": 1
+            },
+            "read": true,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "no_answer_last"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 0,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 0 gaps still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a refusal that is not about one person stops the sweep like a text with no confirmed answer, and the gap gets no wait of its own",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "no_credit"
+          },
+          "refusedForAll": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 2,
+              "stop": "refused"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 2 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 2 gaps still with a person who is owed, stopped at a refusal that is not about one person"
+          }
+        },
+        {
+          "at": 9,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "no_credit"
+          },
+          "refusedForAll": [
+            "g1"
+          ],
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 2,
+              "stop": "refused"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 1 pass, 2 gaps still with a person who is owed, stopped at a refusal that is not about one person"
+          }
+        },
+        {
+          "at": 29,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 30,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "two_sent",
+            "g2": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 3,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1",
+              "g2"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 2 of 2 sent",
+                "ok"
+              ],
+              [
+                "g2",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 3 texts sent in 2 passes, 0 gaps still with a person who is owed"
+          }
+        },
+        {
+          "at": 35,
+          "owed": [
+            "g3"
+          ],
+          "passes": {
+            "g3": "no_credit"
+          },
+          "refusedForAll": [
+            "g3"
+          ],
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": "refused"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g3"
+            ],
+            "said": [
+              [
+                "g3",
+                "Text notice, later pass: 0 of 2 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed, stopped at a refusal that is not about one person"
+          }
+        },
+        {
+          "at": 44,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 45,
+          "owed": [
+            "g3"
+          ],
+          "passes": {
+            "g3": "two_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 2,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g3"
+            ],
+            "said": [
+              [
+                "g3",
+                "Text notice, later pass: 2 of 2 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 2 texts sent in 1 pass, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a different run took each person, or no one was left, so the later pass says nothing",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "taken",
+            "g2": "no_one"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 0,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1",
+              "g2"
+            ],
+            "said": [],
+            "line": "text sweep: 0 texts sent in 2 passes, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "a confirmed text and then a text with no confirmed answer in one pass: the sweep stops and the wait is 10 minutes",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "sent_then_no_answer"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 1,
+              "left": 2,
+              "stop": "unconfirmed"
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 1 of 3 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 1 pass, 2 gaps still with a person who is owed, stopped at a text with no confirmed answer"
+          }
+        },
+        {
+          "at": 9,
+          "expect": {
+            "result": {
+              "state": "waiting"
+            },
+            "read": false,
+            "checked": false,
+            "passed": [],
+            "said": [],
+            "line": null
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "one_sent",
+            "g2": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 2,
+              "left": 0,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g2",
+              "g1"
+            ],
+            "said": [
+              [
+                "g2",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ],
+              [
+                "g1",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 2 texts sent in 2 passes, 0 gaps still with a person who is owed"
+          }
+        }
+      ]
+    },
+    {
+      "name": "the provider does not answer while one gap waits for its own try: only the gap that is due is told",
+      "steps": [
+        {
+          "at": 0,
+          "owed": [
+            "g1"
+          ],
+          "passes": {
+            "g1": "refused"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 1,
+              "sent": 0,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g1"
+            ],
+            "said": [
+              [
+                "g1",
+                "Text notice, later pass: 0 of 1 sent",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: 0 texts sent in 1 pass, 1 gap still with a person who is owed"
+          }
+        },
+        {
+          "at": 5,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "provider": "unreachable",
+          "expect": {
+            "result": {
+              "state": "provider",
+              "reason": "unreachable",
+              "gaps": 1
+            },
+            "read": true,
+            "checked": true,
+            "passed": [],
+            "said": [
+              [
+                "g2",
+                "waiting",
+                "failed"
+              ]
+            ],
+            "line": "text sweep: nothing sent for 1 gap, the text message provider did not answer (unreachable)"
+          }
+        },
+        {
+          "at": 10,
+          "owed": [
+            "g1",
+            "g2"
+          ],
+          "passes": {
+            "g1": "refused",
+            "g2": "one_sent"
+          },
+          "expect": {
+            "result": {
+              "state": "swept",
+              "gaps": 2,
+              "sent": 1,
+              "left": 1,
+              "stop": null
+            },
+            "read": true,
+            "checked": true,
+            "passed": [
+              "g2",
+              "g1"
+            ],
+            "said": [
+              [
+                "g2",
+                "Text notice, later pass: 1 of 1 sent",
+                "ok"
+              ]
+            ],
+            "line": "text sweep: 1 text sent in 2 passes, 1 gap still with a person who is owed"
+          }
+        }
+      ]
+    }
+  ]
+}

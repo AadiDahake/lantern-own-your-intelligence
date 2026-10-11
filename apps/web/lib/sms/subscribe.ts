@@ -22,10 +22,9 @@
  * before the write and they do not depend on the number, so the answer never says if a number
  * was known before.
  *
- * Known limits. This code cannot take back a row when the database fails two times in one
- * request (the write lands and the delete does not); the answer is then `unavailable` and the
- * sealed number stays until a pass erases it. And a person who is owed a text does not get it
- * when the pass at the draft stops before their turn; `notice.ts` says why.
+ * Known limit. This code cannot take back a row when the database fails two times in one
+ * request (the write lands and the delete does not); the answer is then `unavailable`, and the
+ * row stays. If the draft is open by then, the sweep texts that number (`sweep.ts`).
  *
  * A phone number is never in a result, a reason, or a log line.
  */

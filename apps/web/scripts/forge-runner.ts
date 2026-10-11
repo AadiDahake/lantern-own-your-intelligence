@@ -24,6 +24,7 @@ import { smsSender } from "../lib/env";
 import { beatOnce, HEARTBEAT_MS } from "../lib/forge/heartbeat";
 import { claimQueuedExploration } from "../lib/graph/jobs";
 import { runClaimedExploration } from "../lib/graph/run-exploration";
+import { runDraftSweeps } from "../lib/sms/subscribers";
 
 const POLL_MS = 2_000;
 
@@ -95,9 +96,11 @@ async function beat(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  say("forge runner polling for queued runs, decisions and explorations");
+  say("forge runner polling for queued runs, decisions, explorations and owed texts");
   void beat();
   setInterval(() => void beat(), HEARTBEAT_MS).unref();
+  // A later pass for each person who is still owed a text while a draft is open (`lib/sms/sweep.ts`).
+  runDraftSweeps(say);
   let stopping = false;
   process.on("SIGINT", () => {
     stopping = true;

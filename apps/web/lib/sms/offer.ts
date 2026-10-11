@@ -47,6 +47,15 @@ const QUERY_TIMEOUT_MS = 2_000;
  */
 const PAST_THE_DRAFT = new Set<RequestGroupStatus>(["pr_open", "awaiting_approval", "shipped", "rejected"]);
 
+/**
+ * The states in which a draft pull request is open: of a gap, and of the run that opened it. The
+ * text says "a change is drafted and the team reviews it next". A later pass texts an owed
+ * person only while the gap and its own run are in one of these states and no person has decided
+ * that run (`owedGaps` in `lib/sms/subscribers.ts`). A gap alone keeps `awaiting_approval` after
+ * the decision, until the merge and the deployment end.
+ */
+export const DRAFT_OPEN: readonly RequestGroupStatus[] = ["pr_open", "awaiting_approval"];
+
 /** True while a draft change for the gap can still open, so a text about it can still come. */
 export function awaitsDraft(status: RequestGroupStatus): boolean {
   return !PAST_THE_DRAFT.has(status);

@@ -257,4 +257,22 @@ describe("listNumbers", () => {
     });
     expect(await listNumbers(SENDER, { fetchImpl: refused.fetchImpl })).toEqual({ ok: false, reason: "unreachable" });
   });
+
+  it("is not an answer when a failure status carries a list of numbers", async () => {
+    // The sweep sends only after this call says ok, so only a 2xx can say it.
+    const failing = fetchReturning(() => jsonResponse({ numbers: [] }, 500));
+    expect(await listNumbers(SENDER, { fetchImpl: failing.fetchImpl })).toEqual({ ok: false, reason: "http_500" });
+  });
+
+  it("gives up after its time limit, with the signal that ends the call", async () => {
+    let signal: AbortSignal | undefined;
+    const never = ((_url: string, init: RequestInit = {}) => {
+      signal = init.signal ?? undefined;
+      return new Promise<Response>((_resolve, reject) => {
+        signal?.addEventListener("abort", () => reject(signal?.reason));
+      });
+    }) as typeof fetch;
+    expect(await listNumbers(SENDER, { fetchImpl: never, timeoutMs: 20 })).toEqual({ ok: false, reason: "timeout" });
+    expect(signal?.aborted).toBe(true);
+  });
 });

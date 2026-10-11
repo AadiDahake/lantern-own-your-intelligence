@@ -19,11 +19,11 @@
  * - One pass texts at most `PASS_LIMIT` people and takes at most `PASS_BUDGET_MS`, so the run
  *   that waits for it is never held for long.
  *
- * Nothing starts a second pass. A gap gets one draft pull request (`actionFor` in
- * `lib/agent/requests.ts` starts no second one), so a person who is still owed after the pass (a
- * refusal, a pass that stopped, the time budget) gets no text, and the sealed number stays
- * stored. This is a known limit; a sweep that texts owed people while the draft is open is the
- * fix, and it is not built.
+ * The pass at the draft runs one time, and the automatic path starts one draft for a gap
+ * (`actionFor` in `lib/agent/requests.ts` starts no second one). A person who is still owed
+ * after it (a refusal, a pass that stopped, the time budget) is texted by the sweep in the
+ * runner's loop while the draft is open (`sweep.ts`). The sweep runs this same pass, so this
+ * rule is the only sender.
  *
  * A phone number is never in an outcome, a reason, or a trace row.
  */
@@ -72,9 +72,12 @@ export const PASS_LIMIT = 200;
 /** The longest a pass goes on to the next person. One more send can end after it. */
 export const PASS_BUDGET_MS = 60_000;
 
-/** The words of anything that was thrown, cut short. A rejection is not always an `Error`. */
+/**
+ * The words of anything that was thrown, cut short. A rejection is not always an `Error`, and an
+ * error with no words is named by its kind, as the worker does.
+ */
 export function thrownMessage(error: unknown): string {
-  return (error instanceof Error ? error.message : String(error)).slice(0, 300);
+  return (error instanceof Error ? error.message || error.name : String(error)).slice(0, 300);
 }
 
 /** Sends the text to each person who is owed it. Never throws. */

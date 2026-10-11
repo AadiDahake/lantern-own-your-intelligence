@@ -700,6 +700,7 @@ The console renders these specially and falls back to a key/value list for anyth
 | `artifact` (pipeline) | `"capability_spec"` -> `{id, version, intent, summary, session_count, median_manual_actions, median_interactions, scenarios, constraints, actions, opportunity_id}`; `"replays"` -> `{linked, checked, failed}`; `"outcome"` -> `{source, intent, eligible, used, succeeded, median_actions_before, median_actions_after, support_before, support_after, support_change_pct}` |
 | `tool` (pipeline) | `{tool: "hogql", transport: "rest", args_summary, result_summary, sessions, matching_sessions, median_manual_actions, median_interactions, window_days, queries: [{name, rows, durationMs, cached}]}` |
 | `status` (text notice) | `{notice: "draft_sms", state: "off" \| "failed" \| "done", reason?, asked?, sent?, unconfirmed?, taken?, reasons?: string[]}`; `taken` counts the people a different run claimed at the same moment, and `reasons` are short codes (`rate_limited`, `http_400`, `timeout`, `unreachable`, `pass_limit`). Never a phone number and never the provider's own words |
+| `status` (text notice, later pass) | The same shape with `pass: "later"`, titled "Text notice, later pass: ...". The sweep of a runner writes it, into the trace of the run whose draft is open. One more state: `{notice: "draft_sms", pass: "later", state: "waiting", reason}` when the provider did not answer the read-only question, so nothing was sent; `reason` is a short code (`http_503`, `timeout`, `unreadable_answer`) |
 | `decision` (text offer) | `{notice: "draft_sms", offer: "on" \| "off", reason?}`, titled "Text notice: offered with the report" or "Text notice: not offered". One row for each answer that offers a report. Its kind is not `status`, because the console reads the newest `status` row as the worker's heartbeat |
 | `decision` "The user asked for this to be reported" | the feature request, `groupId`, the counts and the priority, and `textNotice: {state, reason?}` when the report asked for the text. Never a phone number |
 | `status` "worker online" | `{engine: "local" \| "forge", at, sms}`: a runner's heartbeat, one row for each project every 60 seconds. The worker writes it for `local` and the forge runner writes it for `forge`. `sms` is true when that runner has both text message variables, and the web app offers the text only from these rows |
@@ -1011,19 +1012,65 @@ there that calls the provider.
   one person their text and not everyone. A pass also stops after 200 people (`PASS_LIMIT`) or 60
   seconds (`PASS_BUDGET_MS`), because the run waits for it; the trace row then says `pass_limit`
   or `time_budget`. Every query of the store has a 10 second limit.
-- **What the worker repeats, and what it does not.** The send is one attempt in both engines. It
-  is the one call in the worker that does not go through `steps/retry.py`. The worker's store
+- **What the worker repeats, and what it does not.** The send is one attempt in both engines,
+  and so is the read-only question of the sweep: no call to the provider goes through
+  `steps/retry.py`. The worker's store
   calls do go through it, each request with the 10 second limit: a read and the erase of a number
   are repeated after a blip, because a second one changes nothing. The claim and the release of a
   claim are made one time. A claim that is repeated after a lost answer comes back empty when the
   first one landed, and then nobody can say who holds the person. A release that is repeated can
   free the claim of a run that took the person in between.
-- **Nothing starts a second pass.** A gap gets one draft pull request (`actionFor` starts no
-  second one). So a person who is still owed after the pass gets no text, and the sealed number
-  stays stored: a refusal for that person, a pass that stopped at a failure, the 60 second budget.
-  The worker runs the pass in a `finally` once the pull request is open, so a step that fails
-  after that point (the comment on the pull request, a trace row) does not skip it. A sweep that
-  texts owed people while the draft is open is the fix for the rest, and it is not built.
+- **The sweep: a later pass while the draft is open.** The pass at the draft runs one time, and
+  the automatic path starts one draft for a gap (`actionFor` starts no second one; a person can
+  start a forge run for a gap from the console at any time). The worker runs the pass in a
+  `finally` once the pull request is open, so a step that fails after that point (the comment on
+  the pull request, a trace row) does not skip it. A person who is still owed after it (a refusal
+  for that person, a pass that stopped at a failure, the 60 second budget) is texted by the sweep.
+  Each runner that has both variables sweeps every 5 minutes, and for the first time 5 minutes
+  after it starts (`lib/sms/sweep.ts` in the forge runner, `steps/sms_sweep.py` in the worker;
+  the forge runner starts a sweep each 5 minutes, and the worker waits 5 minutes after a sweep
+  ends). A runner sweeps the drafts of each engine, not only its own. Each gap in the list gets
+  the same pass, and the claim is the same, so a sweep and a run, or two runners, give one text
+  for one consent.
+- **Which gaps the sweep reads.** One query (`owedGaps`, `owed_gaps`) reads at most 1000 gaps
+  (`SWEEP_GAPS`) for which three things are true: the gap is `pr_open` or `awaiting_approval`;
+  the gap's own run (`feature_request_group.escalation_id`) is a full run, is `pr_open` or
+  `awaiting_approval`, and has no `approval`; and a person of the gap is owed. The gap's state
+  alone is not enough: it stays `awaiting_approval` from the moment a person decides until the
+  merge and the deployment end, and for good when one of those fails. The text says "the team
+  reviews it next", so it does not go out after a person decided the gap's own run. The run's
+  state alone is not enough either: the worker sets it to `pr_open` before the pull request
+  exists. And the run must be the gap's own, the full run that was attached to the gap last
+  (`attachRun`), not any run of the gap: the worker leaves a run that only carried a new count
+  at `awaiting_approval` when that run fails while the gap has a pull request (`pipeline.fail`),
+  and an older draft can stay not decided after a newer one was approved. The sweep asks the
+  same thing about one gap again just before that gap's pass (`draftStillOpen`), because the
+  list is read one time and a pass can come minutes later. A draft that a person closed or
+  merged on GitHub by hand is not known to Lantern, and its people are still texted.
+- **A later try must not cost more people than it helps.** Four rules hold that. The waits are
+  in the memory of the runner and are measured on a clock that only goes forward. A runner that
+  starts again starts with no wait, which is why its first sweep comes 5 minutes after the start:
+  a runner that stops within 5 minutes of each start sweeps nothing.
+
+  | When | What the sweep does |
+  |---|---|
+  | The provider does not answer one read-only question (`GET /api/v1/numbers`: any status but 2xx, no answer, or a 2xx that is not `{numbers: [...]}`) | It claims no one and sends nothing, and it asks again at the next sweep. An outage, a wrong address and a key that stopped working cost no person their text |
+  | A text has no confirmed answer (`unconfirmed`) | That person is not texted again. The sweep stops, and no gap is tried for 10 minutes, then 2 times as long each time, up to 6 hours. One confirmed text ends the wait. The gap of that text also waits by itself, and the due gaps are tried by their own wait, the shortest first. So the gap that caused the stop is not the first try after the wait. With several such gaps ahead of a good gap in the list, the good gap waits one step for each of them |
+  | A send is refused for a cause that is not the person (`forAll`: no credit, a key that the provider does not take) | The sweep stops and waits in the same way. No person loses anything, and one try for each wait is enough to see the cause end. The gap gets no wait of its own |
+  | A pass left people and confirmed no text (the provider refuses the number each time, or the list could not be read) | That gap waits by itself in the same way: 10 minutes, 20, 40, up to 6 hours. It holds back no other gap that the sweep reads. A pass that confirmed a text is due again at the next sweep, and its wait starts from nothing |
+
+  A gap that is missing from a list keeps its wait and its last row: a different runner can hold
+  its one person for the moment of a send. A gap is forgotten when no list had it for more than
+  6 hours, counted from the first list without it. The pass at the draft does not ask the
+  question first, so an outage at that moment still costs one
+  person their text. The worker reads at most 1 MB of the answer to the question, so for an
+  account with more numbers than that fits, the worker's sweep sends nothing. A sweep sends at
+  any hour: the product does not know a person's time zone.
+- **One text for one consent, also in the sweep.** A person who asks again gets a new text for
+  the new consent. One narrow case follows from that: a person who was texted at the draft and
+  whose second request was read before the draft opened and stored after it has an owed row
+  while the draft is open. The take-back does not find that row, because the row keeps the id of
+  the first answer. The sweep texts it, so that person gets a second text for the second request.
 - **What a stopped run leaves.** A run that stops between the claim and the record of the send
   leaves a claimed row with its number. A claim is held for seconds, so each pass first erases the
   number of every claim of the project that is older than 15 minutes (`forgetStale`). A stored
@@ -1043,28 +1090,47 @@ there that calls the provider.
   request row: "Text notice: off" with the missing variable, "Text notice: no one asked for a text
   about this request", "Text notice: 2 of 3 sent" (status `failed` when one was not sent), "Text
   notice: a different run sent the texts", or "Text notice: could not read who asked for a text".
-  A notice that fails never fails the run.
+  A notice that fails never fails the run. The sweep writes its rows into the trace of the gap's
+  own run: "Text notice, later pass: 1 of 2 sent", "Text notice, later pass: could not read who
+  is owed a text", or "Text notice, later pass: not sent yet, the text message provider did not
+  answer". A runner writes a row only when the row differs from the last one that it wrote for
+  that gap, so a number that is refused on each try gives one row and not one for each try. The
+  row about the provider is one row for as long as the provider does not answer, whatever the
+  reason of each try is. A later pass with no one to text writes no row. The runner's own log has a line for a sweep ("text sweep:
+  ...") when the line differs from the last one, and always when a text was sent.
 - **A phone number is never logged.** It is in the sealed column and in the request body to the
   provider, and nowhere else: not in a trace row, an error, a reason code, or a console line.
 - **Two copies of one rule.** The text rules are in `packages/shared/src/sms.ts` and in
   `services/worker/steps/sms_text.py`. `packages/shared/test/fixtures/sms-text.json` holds inputs
   and the exact text each one becomes, and both test suites run every one of them, so a rule
-  changes in both files and in the fixture together. The sealed number has the same proof: the
+  changes in both files and in the fixture together. The rule of the sweep has the same proof:
+  `packages/shared/test/fixtures/sms-sweep.json` holds scenarios (the list of gaps, the provider's
+  answer and the outcome of each pass at a given minute, and what the sweep must do), and both
+  test suites run each step against their own copy. The fixture holds the rule only: the query,
+  the question to the provider and the timers have tests of their own in each suite. The sealed
+  number has it too: the
   worker's `tests/test_seal.py` opens a value that `sealPhone` wrote. One difference is known. An
   accented letter is folded with the Unicode data of the runtime, so a character that a newer
   Unicode version added can fold to a letter in one runtime and to nothing in the other. Both
   results are in the basic SMS alphabet.
 
 With `DIAL_API_KEY` or `DIAL_FROM_NUMBER` blank the notice is off, the table is not read, and the
-run is the same as before, plus the one trace row. The answer then has no `textNotice`, the card
+run is the same as before, plus the one trace row. The sweep is off too: it reads nothing, calls
+nothing and writes no row, and the runner's log says "text sweep: off" with the variable one
+time, 5 minutes after the start. The answer then has no `textNotice`, the card
 has no field, and the report is the same as before.
 
 What is not built. A person cannot take a request for a text back. A sealed number stays stored
-for as long as no draft opens and the gap is not deleted, and after a pass that did not reach the
-person. When the database fails two times in one request (the write lands and the delete does
-not), the answer is `unavailable` and the row stays. The forge engine logs a failed write of the
-gap's state and goes on, so after such a failure a row can be stored for a gap whose draft is
-open.
+for as long as no draft opens and the gap is not deleted, for as long as the provider refuses the
+number while the draft is open, and after the draft was decided with the person still owed. When
+the database fails two times in one request (the write lands and the delete does not), the answer
+is `unavailable` and the row stays; the sweep texts that number if the draft is open. Each engine
+can fail to write the gap's state and go on (the forge engine logs it; the worker leaves the gap
+at `drafting`), so after such a failure a row can be stored for a gap whose draft is open, and
+the sweep does not see that gap. With no runner that
+has both variables, nothing is swept: the people of the open drafts wait until such a runner runs
+again. A claim carries the time of the runner that made it, so two runners whose clocks differ by
+15 minutes can erase the number of a claim that the other one holds at that moment.
 
 ### The local engine's draft
 
@@ -1165,7 +1231,7 @@ Notes the API enforces:
 
 The provider is Dial. `SMS` in `@lantern/shared` holds the two paths and the caps,
 `apps/web/lib/dial.ts` is the only module in the web app that calls it, and the base address is
-`DIAL_API_URL`. The worker has the same two pieces: `steps/sms_text.py` holds the send path and
+`DIAL_API_URL`. The worker has the same two pieces: `steps/sms_text.py` holds the two paths and
 the cap, and `steps/dial.py` is the only module in the worker that calls the provider. Nothing
 else names an endpoint.
 
@@ -1174,7 +1240,7 @@ Chosen on **2026-10-11** by reading <https://docs.getdial.ai> and the OpenAPI do
 | What | Value | Why |
 |---|---|---|
 | Send one text | `POST /api/v1/messages`, `Authorization: Bearer <key>`, JSON `{to, fromNumber, body}`; `201 {message: {id, status}}` | The OpenAPI document uses the `/api/v1` prefix, and some guide pages show `/v1`. The path is one constant in `SMS`, and `npm run dial:live` proves it with the first key. |
-| List the account's numbers | `GET /api/v1/numbers` | Read-only. The live check uses it to prove the key, and to show the sender number's 10DLC status, which decides if a US phone gets the text. |
+| List the account's numbers | `GET /api/v1/numbers`; `200 {numbers: [...]}` | Read-only. The live check uses it to prove the key, and to show the sender number's 10DLC status, which decides if a US phone gets the text. The sweep asks it before it claims a person: a provider that does not answer this call as itself is not sent a text (`listNumbers`, and `provider_answers` in the worker). |
 | Body cap | 1530 characters; 670 when one character is outside the basic SMS alphabet | From the send call's reference. `smsText` keeps every body in the basic alphabet, so the 1530 cap always applies. |
 | `channel` | not sent | "Omit to use the number's own default - a standard number sends SMS, an iMessage number sends iMessage", and an iMessage number falls back to SMS for a phone that cannot take it. So the notice works with either kind of sender number. |
 | SDK | not used | The call is one POST. The SDK adds two runtime dependencies for it. |

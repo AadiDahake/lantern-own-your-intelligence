@@ -226,8 +226,23 @@ The worker sends the same text under the `local` engine, so the rule has two cop
 `apps/web/lib/sms` with `packages/shared/src/sms.ts`, and `services/worker/steps/sms_notice.py`
 with `steps/sms_text.py`. Change them together. `packages/shared/test/fixtures/sms-text.json` is
 run by both test suites and holds the two texts equal. `steps/dial.py` is the only module in the
-worker that calls the provider, and its send is the one call there that does not go through
-`steps/retry.py`.
+worker that calls the provider, and no call in it goes through `steps/retry.py`, because that
+module repeats a call.
+
+The pass at the draft runs one time, so each runner also sweeps: `lib/sms/sweep.ts` in the forge
+runner and `steps/sms_sweep.py` in the worker give a later pass to each person who is still owed
+while the draft is open and no person has decided it. The sweep adds no second sender. It calls
+the same pass, so the claim is still the only thing between a person and a second text. What it
+adds is care about when to try: it asks the provider one read-only question before it claims
+anyone, it stops for a growing wait after a send that the provider did not take, a gap whose
+number is refused each time waits by itself, and the gap with the least trouble goes first. The
+text says that the team reviews the change next, so `owedGaps` reads a gap only while the gap's
+own run (`feature_request_group.escalation_id`) is a full run with no approval. Do not read the
+gap's state alone, because it stays `awaiting_approval` after the decision, and do not read any
+run of the gap, because a failed run that only carried a count stays at `awaiting_approval` too. `packages/shared/test/fixtures/sms-sweep.json` is run by both test suites
+and holds the two copies of the rule equal; add a scenario there when you change a wait, the
+order of the tries, or a row. The query, the question and the timers have their own tests in
+each suite.
 
 ## A blip on the wire is not a verdict on the request
 
