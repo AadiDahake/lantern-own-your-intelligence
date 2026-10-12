@@ -131,7 +131,7 @@ with `source: "forge"`.
 | 13 | `select.ts`: highest scenarios passed, tie-break on fewest changed files. | `decision` "Selected candidate B, 21/21" |
 | 14 | The winner builds and serves; the URL is health-checked. | `preview` "Preview live" with `{url, candidate}` |
 | 15 | The loser's sandbox is torn down. | `status` "Candidate A torn down" |
-| 16 | Branch pushed, draft pull request opened with the body from `pr.ts`. | `tool` "Pushed ...", `artifact` "Draft PR #182" |
+| 16 | Branch pushed, draft pull request opened with the body from `pr.ts`. Each person who asked for a text about this gap gets it now (`lib/sms`). | `tool` "Pushed ...", `status` "Text notice: ...", `artifact` "Draft PR #182" |
 | 17 | Pause for a person. | `pause` "Approve & merge?" |
 | 18 | On approval: mark ready, squash merge, watch the Vercel deployment (`deploy.ts`), tear the winner down. On rejection: close the pull request, tear the winner down. | `status` rows, `artifact` "Deployment is live" |
 
@@ -210,6 +210,21 @@ the Activity page and the widget's status are unchanged.
 The `escalation` row is the queue. `lib/forge/queue.ts` holds both claims and
 `apps/web/scripts/forge-runner.ts` is the loop, which polls every 2 s and carries each claimed row
 on its own promise, so a run waiting on a deployment does not hold up the next one.
+
+The runner also writes a heartbeat for each project every 60 s (`lib/forge/heartbeat.ts`): a
+`status` trace row titled "worker online" with `{engine: "forge", at, sms}`, the same row the
+worker writes for `local`. The console's "Agent live" reads it. `sms` says if this process has
+both text message variables, and the web app offers the text on the widget's gap card only when
+the runner says so, because this process sends that text and the web app cannot see its
+environment.
+
+With both variables the runner also starts one sweep every 5 minutes (`lib/sms/sweep.ts`), the
+first one 5 minutes after it starts: a later pass for each person who is still owed a text while
+a draft is open and no person has decided it, because the pass at the draft runs one time. It
+reads the drafts of each engine. The sweep asks the provider one read-only question before it
+claims a person, and it waits longer after each try that cannot work now. "The text notice" in section 4 of
+`docs/contracts.md` has the rules. This sweep is not `npm run forge:sweep`, which shuts down
+devboxes.
 
 | Queue | A row joins it when | The runner claims it by | Then |
 |---|---|---|---|

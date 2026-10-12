@@ -10,6 +10,7 @@
  * winner is torn down before the pull request opens; the winner is torn down on the decision.
  */
 import { GithubClient } from "../github";
+import { noticeTrace, thrownMessage, type DraftNotice, type NoticeOutcome } from "../sms/notice";
 import { CANDIDATE_PLANS, runCandidate, type CandidateOutcome } from "./candidate";
 import { waitForDeployment } from "./deploy";
 import type { CapabilityIr } from "./ir";
@@ -40,6 +41,11 @@ export type ForgeDeps = {
   store: ForgeStore;
   personas: Personas;
   codexApiKeyEnvVar: string | null;
+  /**
+   * Texts the people who asked to hear about this gap, when the draft pull request opens. A run
+   * with no list of people (a test, the command-line run) leaves it out, and the trace says off.
+   */
+  notifyDraft?: DraftNotice;
   log?: (line: string) => void;
 };
 
@@ -55,6 +61,16 @@ export type ForgeRunResult = {
 };
 
 const commitMessage = (title: string): string => `feat: ${title.charAt(0).toLowerCase()}${title.slice(1)}`;
+
+/** The notice's result. A notice that throws is a failed notice, never a failed run. */
+async function draftNotice(notify: DraftNotice | undefined): Promise<NoticeOutcome> {
+  if (!notify) return { state: "off", reason: "this run has no list of people to text" };
+  try {
+    return await notify();
+  } catch (error) {
+    return { state: "failed", reason: thrownMessage(error) };
+  }
+}
 
 /** Runs the whole pipeline for one escalation. Resolves when it pauses for approval, or fails. */
 export async function runForge(input: ForgeRunInput, deps: ForgeDeps): Promise<ForgeRunResult> {
@@ -223,6 +239,8 @@ export async function runForge(input: ForgeRunInput, deps: ForgeDeps): Promise<F
       branch: winner.branch,
     });
     await store.updateGroup({ status: "pr_open", prUrl: pr.url });
+    // Before the pull request row, so the trace still ends on the pull request and the pause.
+    await store.trace(noticeTrace(await draftNotice(deps.notifyDraft)));
     await store.trace({
       kind: "artifact",
       status: "ok",

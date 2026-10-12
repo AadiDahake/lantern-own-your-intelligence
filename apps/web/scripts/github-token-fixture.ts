@@ -6,7 +6,7 @@
  * The key and the plaintext are throwaway values passed in on the command line; never run this
  * with a real service role key, because the output would go into the repository.
  *
- *   npx tsx apps/web/scripts/github-token-fixture.ts <fake-service-role-key> <fake-token>
+ *   npx tsx --tsconfig apps/web/tsconfig.json apps/web/scripts/github-token-fixture.ts <fake-service-role-key> <fake-token>
  */
 import { encryptToken } from "../lib/github/secret";
 

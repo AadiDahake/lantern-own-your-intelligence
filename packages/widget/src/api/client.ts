@@ -3,12 +3,14 @@ import { visitorId } from './visitor';
 import type {
   ChatEvent,
   ChatRequest,
+  EscalateRequest,
   EscalationView,
   FeedbackRating,
   FeedbackRequest,
   PageContext,
   ReportBlock,
   Step,
+  TextNoticeState,
 } from '../types';
 
 /** How a walk ended, with the steps it was planned with. */
@@ -34,10 +36,18 @@ export type ObserveInput = {
   transition?: ObservedTransition;
 };
 
-/** Reporting either starts, or is refused for a reason the widget can explain. */
+/**
+ * Reporting either starts, or is refused for a reason the widget can explain. `notice` is what
+ * became of the request for the one text, and it is there only when the report asked for one.
+ */
 export type EscalateResult =
-  | { ok: true; escalationId: string; status: string }
+  | { ok: true; escalationId: string; status: string; notice?: TextNoticeState }
   | { ok: false; reason: ReportBlock };
+
+/** The server's answer about the text. Anything it did not say reads as "not set up". */
+function toNoticeState(value: unknown): TextNoticeState {
+  return value === 'subscribed' || value === 'not_needed' ? value : 'unavailable';
+}
 
 export type ClientConfig = { apiBase: string; key: string };
 
@@ -92,21 +102,31 @@ export class ApiClient {
     }
   }
 
-  async escalate(conversationId: string, messageId: string): Promise<EscalateResult> {
+  /**
+   * Reports the gap. `phone` is the number the person agreed to be texted on, in E.164 form; it
+   * goes to the server in this one request and is kept nowhere in the widget.
+   */
+  async escalate(conversationId: string, messageId: string, phone?: string): Promise<EscalateResult> {
+    const request: EscalateRequest = { key: this.config.key, conversationId, messageId, visitorId: visitorId() };
+    if (phone) request.notify = { phone, consent: true };
     const response = await fetch(this.url('/api/escalate'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ key: this.config.key, conversationId, messageId, visitorId: visitorId() }),
+      body: JSON.stringify(request),
     });
     const body = (await response.json().catch(() => ({}))) as {
       escalationId?: string;
       status?: string;
       reason?: string;
+      notify?: unknown;
     };
     if (!response.ok || !body.escalationId) {
       return { ok: false, reason: body.reason === 'no_repository' ? 'no_repository' : 'failed' };
     }
-    return { ok: true, escalationId: body.escalationId, status: body.status ?? 'queued' };
+    const result: EscalateResult = { ok: true, escalationId: body.escalationId, status: body.status ?? 'queued' };
+    // A server that did not answer about the text did not store the number.
+    if (phone) result.notice = toNoticeState(body.notify);
+    return result;
   }
 
   async escalation(id: string): Promise<EscalationView> {

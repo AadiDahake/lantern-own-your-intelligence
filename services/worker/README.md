@@ -52,9 +52,43 @@ the message. Everything else in the conventions still binds.
 When `SLACK_WEBHOOK_URL` is set, one message goes out when the issue is filed and one when the
 draft pull request opens.
 
+### The text notice
+
+When `DIAL_API_KEY` and `DIAL_FROM_NUMBER` are set, each person who agreed to a text about the gap
+gets it one time when the draft pull request opens. The rule is the web app's own
+(`apps/web/lib/sms`), copied in `steps/sms_notice.py`: claim the person with one conditional
+update on `gap_subscriber.notified_at`, send one time through `steps/dial.py`, then erase the
+number, or give the claim back when the provider refused. The send does not go through
+`steps/retry.py`, because the provider's send call has no idempotency key and a second attempt
+can be a second text. The trace gets one `status` row before the pull request
+row: "Text notice: off" with the variable that is missing, "Text notice: no one asked for a text
+about this request", or "Text notice: 2 of 3 sent". A notice that fails never fails the run. A
+phone number is never in a trace row, a log line or an error. "The text notice" in section 4 of
+`docs/contracts.md` is the contract.
+
+That pass runs one time, so the runner also sweeps (`steps/sms_sweep.py`, the worker's copy of
+`apps/web/lib/sms/sweep.ts`). Every 5 minutes, and for the first time 5 minutes after the runner
+starts, it reads the gaps that have an open draft which no person has decided, and a person who
+is still owed a text, and it runs the same pass for each one. It reads the drafts of each engine,
+not only its own. Four rules keep a later try from costing more people than it helps. It asks the
+provider one read-only question first (`GET /api/v1/numbers`), and it claims no one when the
+provider does not answer as itself. A send that the provider did not take (a text with no
+confirmed answer, or a refusal that is not about one person, such as no credit) stops the whole
+sweep for 10 minutes, then 2 times as long each time, up to 6 hours, until one text is confirmed.
+A gap whose number is refused each time waits in the same way by itself. And the gap with the
+least trouble goes first. The waits are in memory. A later pass writes its row into the trace of
+the gap's own run ("Text notice, later pass: 1 of 2 sent"), and only when the row differs from
+the last one that this runner wrote for the gap. The runner's log has a line for a
+sweep ("text sweep: ...") when the line differs from the last one, and always when a text was
+sent. With the two variables not set it says "text sweep: off" with the missing variable one time.
+
 Every step updates `escalation.status` and writes `trace_event` rows (source `workflow`) through
 PostgREST, so the console's Activity page shows the run live. A heartbeat writes a `status` trace
-event ("worker online") per project every 60 s.
+event ("worker online") per project every 60 s. Its detail says `sms: true` when both text message
+variables are set here. The web app reads the last heartbeat and offers "Text me when a change for
+this is drafted" on the widget's gap card only then, because this process sends that text. Once
+the draft pull request is open, the text notice runs whatever fails next in that step, so a
+refused comment on the pull request does not cost each person their text.
 
 The model ids the worker uses live in `steps/llm.py` and nowhere else. `docs/contracts.md`
 section 5 records each choice and why.
@@ -62,7 +96,7 @@ section 5 records each choice and why.
 ## Layout
 
 ```
-local_runner.py    the engine: polls escalation rows, runs the steps, pause by polling `approval`
+local_runner.py    the engine: polls escalation rows, runs the steps, pause by polling `approval`; the heartbeat thread and the sweep thread
 heartbeat.py       the "worker online" trace event loop
 models.py          Pydantic models: FeatureRequestInput, IssueRef, Plan, Draft, PrRef, Approval, Outcome
 config.py          environment access
@@ -79,6 +113,11 @@ steps/drafting.py  the draft / gate / repair / new-candidate loop
 steps/deploy.py    Vercel deployment polling by commit sha, with a clean 10 minute timeout
 steps/issue.py     issue and PR body builders
 steps/slack.py     optional webhook
+steps/sms_notice.py  the text notice: the one-text rule, the people in `gap_subscriber`, the trace row
+steps/sms_sweep.py   the sweep: a later pass for each person who is still owed a text while the draft is open
+steps/sms_text.py  how a text is written; the worker's copy of `packages/shared/src/sms.ts`
+steps/dial.py      the text message provider: one send, one attempt; and the read-only question of the sweep
+steps/seal.py      opens what the dashboard stores encrypted (the GitHub token, a phone number)
 tests/             pytest suite and the fixture Next.js app
 ```
 
@@ -101,12 +140,15 @@ yourself (see `.env.example`).
 |---|---|---|
 | `OPENAI_API_KEY` | yes | OpenAI API key, used by every model call |
 | `SUPABASE_URL` | yes | `https://<ref>.supabase.co` |
-| `SUPABASE_SERVICE_ROLE_KEY` | yes | service role key; the worker writes `escalation` and `trace_event`, and derives the key that decrypts a project's linked GitHub token |
+| `SUPABASE_SERVICE_ROLE_KEY` | yes | service role key; the worker writes `escalation` and `trace_event`, and derives the keys that open a project's linked GitHub token and the phone number of a person who asked for a text |
 | `GITHUB_TOKEN` | yes | fallback credential, used only for a project whose owner has not linked a GitHub account: fine-grained PAT with contents, issues and pull requests read-write on the target repository |
 | `VERCEL_TOKEN` | yes | token for the Vercel team that owns the target project |
 | `TARGET_VERCEL_PROJECT` | no (`novaair`) | Vercel project name whose deployment the worker waits for |
 | `TARGET_PRODUCTION_URL` | no | Stable address of that project's production deployments; blank reports each deployment's own URL |
 | `SLACK_WEBHOOK_URL` | no | post a message when an issue and a draft PR exist |
+| `DIAL_API_KEY` | no | Dial API key; with `DIAL_FROM_NUMBER` it turns on the text notice and the sweep. Blank: off, and the trace and the runner's log say so |
+| `DIAL_FROM_NUMBER` | no | the Dial number that sends each text: E.164, its id, or its nickname |
+| `DIAL_API_URL` | no (`https://api.getdial.ai`) | the Dial API base |
 | `LANTERN_CACHE_DIR` | no (`~/.cache/lantern`) | where cached `node_modules` live |
 
 ### Starting a run by hand

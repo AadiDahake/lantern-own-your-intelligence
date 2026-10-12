@@ -130,6 +130,30 @@ export type EscalateRequest = {
   conversationId?: string;
   messageId: string;
   visitorId?: string;
+  /**
+   * Present only when the person asked for the one text about this gap and agreed to it. `phone`
+   * is the number with its country code. A request with `notify` and no `consent: true` is
+   * refused, and nothing is stored.
+   */
+  notify?: { phone: string; consent: true };
+};
+
+/**
+ * What became of a request for the one text about a gap.
+ *
+ * `subscribed`: the number is stored and one text is owed. `not_needed`: a change for the gap was
+ * drafted already, so no text will come. `unavailable`: the text cannot be set up now. In the last
+ * two cases the number was not stored.
+ */
+export type TextNoticeState = "subscribed" | "not_needed" | "unavailable";
+
+/** Answer of `POST /api/escalate`. */
+export type EscalateResponse = {
+  escalationId: string;
+  groupId: string;
+  status: "queued";
+  /** Present only when the request carried `notify`. */
+  notify?: TextNoticeState;
 };
 
 /** How a visitor rated one answer in the widget. */
@@ -148,9 +172,12 @@ export type FeedbackRequest = {
  *
  * `reason` says why it could not: today the only one is a project with no repository bound, which
  * the widget explains rather than offering a button that cannot work.
+ *
+ * `textNotice` is there only when the process that sends the one text says that it can, and the
+ * gap has no drafted change yet. The widget shows the phone field only then.
  */
 export type EscalationOffer =
-  | { offered: true; request: FeatureRequest }
+  | { offered: true; request: FeatureRequest; textNotice?: true }
   | { offered: false; reason?: "no_repository" };
 
 /**
@@ -168,6 +195,21 @@ export type PlanSummary = {
 
 /** A help article the answer cites. */
 export type AnswerSource = { title: string; url: string | null };
+
+/**
+ * A service outside this product that lists the capability the visitor asked for, from the agent
+ * search (`AGENT_SEARCH`). It is a listing in a public index and not a part of the product: the
+ * two names are the service's own, and nobody at the company has tried it. It carries no
+ * description, because a stranger's sentences do not go under a company's name.
+ */
+export type Alternative = {
+  /** The capability as the service names it. It says the capability that was asked for, word for word. */
+  name: string;
+  /** Who offers it. */
+  provider: string;
+  /** The listing's public page. Always `https`, and always built by the server from two ids. */
+  url: string;
+};
 
 /** `/api/chat` server-sent events, in order of emission. */
 export type ChatEvent =
@@ -196,6 +238,11 @@ export type ChatEvent =
       sources?: AnswerSource[];
       /** A continuation had to change the route, so the count the user saw is no longer true. */
       routeChanged?: boolean;
+      /**
+       * Services outside the product that say they do this now. Only with a verdict of `absent`,
+       * and only the ones that passed every rule of the gate; left out when there is none.
+       */
+      alternatives?: Alternative[];
     }
   | { type: "error"; message: string };
 

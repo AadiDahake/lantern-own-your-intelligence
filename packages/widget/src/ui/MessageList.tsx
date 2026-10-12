@@ -34,7 +34,7 @@ export function MessageList({
    */
   scroll: { current: number };
   onShowMe: (turn: Turn) => void;
-  onReport: (turn: Turn) => void;
+  onReport: (turn: Turn, phone?: string) => void;
   onRate: (turn: Turn, rating: FeedbackRating) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
@@ -110,7 +110,7 @@ function TurnView({
   guiding: boolean;
   elapsedSeconds: number;
   onShowMe: (turn: Turn) => void;
-  onReport: (turn: Turn) => void;
+  onReport: (turn: Turn, phone?: string) => void;
   onRate: (turn: Turn, rating: FeedbackRating) => void;
 }) {
   const offer = turn.answer?.escalation;
@@ -143,10 +143,12 @@ function TurnView({
           reporting={turn.reporting}
           blocked={turn.reportBlocked ?? (offer.offered === true ? undefined : offer.reason)}
           noted={turn.answer.noted}
+          textNotice={offer.offered === true && offer.textNotice === true}
+          notice={turn.textNotice}
           elapsedSeconds={elapsedSeconds}
           rating={turn.rating}
           canRate={canRate}
-          onReport={() => onReport(turn)}
+          onReport={(phone) => onReport(turn, phone)}
           onRate={rate}
         />
       )}

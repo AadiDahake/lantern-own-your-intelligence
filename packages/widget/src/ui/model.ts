@@ -8,6 +8,7 @@ import type {
   ProbeResult,
   ReportBlock,
   Step,
+  TextNoticeState,
   Verdict,
 } from '../types';
 
@@ -40,6 +41,8 @@ export type Turn = {
   reportBlocked?: ReportBlock;
   escalationId?: string;
   escalation?: EscalationView;
+  /** What became of the request for the one text. The number itself is never kept on a turn. */
+  textNotice?: TextNoticeState;
   /** Set once the visitor has said whether this answer helped. */
   rating?: FeedbackRating;
 };

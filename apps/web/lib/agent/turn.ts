@@ -27,6 +27,7 @@ import type {
 import { chatJson, embed } from "../openai";
 import { serviceClient } from "../supabase";
 import { emitTrace } from "../trace";
+import { lookElsewhere, outsideTrace, type OutsideSearch } from "../alternatives/search";
 import {
   findKnownRoute,
   intentKey,
@@ -41,6 +42,7 @@ import {
 import { mapWithCurrentPage } from "../graph/live";
 import { belongsToSite } from "../graph/origin";
 import { recallRoute, rememberedAsKnown } from "../routes/provider";
+import { awaitsDraft, offerTrace, textOffer, type TextOffer } from "../sms/offer";
 import { currentPageOf } from "./bind";
 import { answerChat, answerFromPage, answerFromPassage } from "./direct";
 import { loadVisitorFacts, rememberFromTurn } from "./memory";
@@ -64,9 +66,14 @@ import { understand } from "./understand";
  * A drafted request with no repository to file it against is not an offer: the widget says so
  * instead of showing a button that would come back with an error.
  */
-function escalationOffer(request: FeatureRequest | null, repoFullName: string | null): EscalationOffer {
+function escalationOffer(
+  request: FeatureRequest | null,
+  repoFullName: string | null,
+  textNotice: boolean,
+): EscalationOffer {
   if (!request) return { offered: false };
-  return repoFullName ? { offered: true, request } : { offered: false, reason: "no_repository" };
+  if (!repoFullName) return { offered: false, reason: "no_repository" };
+  return textNotice ? { offered: true, request, textNotice: true } : { offered: true, request };
 }
 
 /**
@@ -395,7 +402,30 @@ async function* knownRouteTurn(input: {
   return true;
 }
 
+/** The agent search of a turn, from its start until the turn reads it. */
+type OpenSearch = { current: { search: OutsideSearch; conversationId: string } | null };
+
 export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
+  const open: OpenSearch = { current: null };
+  try {
+    yield* turnEvents(input, open);
+  } finally {
+    // A turn that fails, and a reader that leaves, can end the turn after the agent search
+    // started and before the answer read it. The capability name did leave the product, so the
+    // search is stopped and recorded here. Nothing in this block waits.
+    const left = open.current?.search.abandon();
+    if (left && open.current) {
+      void emitTrace({
+        projectId: input.projectId,
+        conversationId: open.current.conversationId,
+        source: "agent",
+        ...outsideTrace(left),
+      }).catch(() => undefined);
+    }
+  }
+}
+
+async function* turnEvents(input: TurnInput, open: OpenSearch): AsyncGenerator<ChatEvent> {
   const db = serviceClient();
   const { projectId, question, page } = input;
 
@@ -638,6 +668,11 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
 
   // 8. Route on the evidence. Absence is confirmed by a reasoning model.
   let outcome = routeProbes(probes, input.thresholds);
+  // Every check came back empty. When the deployment turned the agent search on, it starts here
+  // and runs beside the verdict and the draft, so it costs the visitor no time. Only the name of
+  // the capability goes out. The result is read when the answer is ready, and not waited for.
+  const elsewhere = outcome === "absent" ? lookElsewhere(understanding.feature) : null;
+  if (elsewhere) open.current = { search: elsewhere, conversationId };
   let verdict: Verdict = {
     outcome,
     confidence: 0.8,
@@ -968,7 +1003,20 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
   // A gap the agent found joins the other reports of the same gap and rises with them, so the
   // console can see how often it comes back. Nothing is filed by it: opening an issue in the
   // customer's repository is what "Report to developers" is for.
-  const note = request ? await noteRequest({ projectId, request }) : { noted: false, groupId: null };
+  // The text offer is one database read, made at the same time as the note and ended after 2
+  // seconds at most. It is asked only when there is a report to offer, and the offer is not made
+  // for a gap that is already past its draft.
+  const [note, canText] = await Promise.all([
+    request ? noteRequest({ projectId, request }) : { noted: false, groupId: null, status: null },
+    request && repoFullName ? textOffer(projectId) : null,
+  ]);
+  const textNotice: TextOffer | null =
+    canText?.on && note.status && !awaitsDraft(note.status)
+      ? { on: false, reason: `the gap is ${note.status}` }
+      : canText;
+  if (textNotice) {
+    void emitTrace({ projectId, conversationId, groupId: note.groupId, source: "agent", ...offerTrace(textNotice) });
+  }
 
   // A confirmed absence asks the second question: is this one person, or a pattern? The answer
   // comes from PostHog through the opportunity pipeline, enqueued here and run off this turn.
@@ -976,14 +1024,23 @@ export async function* runTurn(input: TurnInput): AsyncGenerator<ChatEvent> {
     void triggerDiscovery({ projectId, groupId: note.groupId, conversationId, trigger: "auto" });
   }
 
+  // A service outside the product is offered only for a confirmed absence, and only when the
+  // search has answered by now. A search that has not is stopped here.
+  const outside = elsewhere?.take(outcome === "absent") ?? null;
+  if (outside) {
+    void emitTrace({ projectId, conversationId, groupId: note.groupId, source: "agent", ...outsideTrace(outside) });
+  }
+  const alternatives = outside?.state === "done" ? outside.offered : [];
+
   yield {
     type: "answer",
     text,
     steps,
-    escalation: escalationOffer(request, repoFullName),
+    escalation: escalationOffer(request, repoFullName, textNotice?.on === true),
     noted: note.noted,
     ...(plan ? { plan } : {}),
     ...(sources.length ? { sources } : {}),
+    ...(alternatives.length ? { alternatives } : {}),
   };
 
   // The widget escalates against the assistant message, so hand its id back.

@@ -210,3 +210,47 @@ export function routeMemoryMode(): RouteMemoryMode {
 
 /** Where route memory keeps its files. Defaults to the OS temp dir. */
 export const routeMemoryDir = (): string | null => process.env.LANTERN_ROUTE_MEMORY_DIR || null;
+
+export type SmsSender = { apiKey: string; fromNumber: string; apiUrl: string };
+
+/** The Dial API base, with no slash at the end. */
+export const smsApiUrl = (): string => optional("DIAL_API_URL", "https://api.getdial.ai").replace(/\/+$/, "");
+
+/**
+ * The text message provider, Dial. The key (`sk_live_...`) and the sender number travel together,
+ * so text messages are off unless both are set. The reason names the first variable that is
+ * missing, and the trace repeats it. `DIAL_FROM_NUMBER` is a number of the account in E.164 form,
+ * its id, or its nickname.
+ */
+export function smsSender(): { configured: true; sender: SmsSender } | { configured: false; reason: string } {
+  // A value of spaces is blank, as it is for the worker.
+  const apiKey = process.env.DIAL_API_KEY?.trim();
+  const fromNumber = process.env.DIAL_FROM_NUMBER?.trim();
+  if (!apiKey) return { configured: false, reason: "DIAL_API_KEY is not set" };
+  if (!fromNumber) return { configured: false, reason: "DIAL_FROM_NUMBER is not set" };
+  return {
+    configured: true,
+    sender: { apiKey, fromNumber, apiUrl: smsApiUrl() },
+  };
+}
+
+export type AgentSearchConfig = { apiKey: string | null; apiUrl: string };
+
+/** The Darwin API base, with no slash at the end. */
+export const agentSearchApiUrl = (): string => optional("DARWIN_API_URL", "https://api.darwin.so").replace(/\/+$/, "");
+
+/**
+ * The agent search, Darwin: where a turn looks for a service outside the product when every check
+ * came back empty. It is on with `DARWIN_API_KEY`, or with `LANTERN_DARWIN=public` and no key
+ * (the search is public at a lower rate). It is off when both are blank, because a search sends
+ * the name of the missing capability to a different company, and a deployment must choose that.
+ * A key wins over the switch. A value of spaces is blank.
+ */
+export function agentSearch(): { configured: true; config: AgentSearchConfig } | { configured: false; reason: string } {
+  const apiKey = process.env.DARWIN_API_KEY?.trim();
+  if (apiKey) return { configured: true, config: { apiKey, apiUrl: agentSearchApiUrl() } };
+  if (process.env.LANTERN_DARWIN?.trim() === "public") {
+    return { configured: true, config: { apiKey: null, apiUrl: agentSearchApiUrl() } };
+  }
+  return { configured: false, reason: "DARWIN_API_KEY is not set and LANTERN_DARWIN is not 'public'" };
+}

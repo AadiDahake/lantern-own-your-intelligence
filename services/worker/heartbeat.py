@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+import config
 from steps import db
 
 INTERVAL_S = 60
@@ -12,9 +13,12 @@ log = logging.getLogger("lantern.heartbeat")
 
 
 def beat_once(engine: str) -> int:
+    # Read on each beat, so a worker that is started again with or without the two variables says
+    # what is true within one beat.
+    sender, _ = config.sms_sender()
     projects = db.list_projects()
     for project in projects:
-        db.heartbeat(project["id"], engine)
+        db.heartbeat(project["id"], engine, sms=sender is not None)
     return len(projects)
 
 

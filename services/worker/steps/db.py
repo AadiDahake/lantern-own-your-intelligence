@@ -2,6 +2,8 @@
 
 Every call goes out through `steps.retry.send`, so a dropped connection to Supabase costs a moment
 rather than the whole escalation. The note in `retry.py` says what is retried and what is not.
+Two writes are made one time and never repeated, the claim of a person who asked for a text and
+the release of that claim; the note on each says why.
 """
 
 from __future__ import annotations
@@ -141,6 +143,201 @@ def release_issue_slot(group_id: str, escalation_id: str) -> None:
     )
 
 
+# The calls below are about `gap_subscriber`, the people who asked for one text about a gap. A run
+# waits for the text notice, so each of them has a shorter limit than the rest. Every query is
+# scoped to the project. Every query about one person is scoped to the gap too, and
+# `forget_stale_subscribers` is for the whole project. `owed_gaps` is not scoped: it reads the
+# gaps of each project for the sweep.
+SUBSCRIBER_TIMEOUT = 10
+
+# The states in which a draft pull request is open: of a gap, and of the run that opened it
+# (`DRAFT_OPEN` in `apps/web/lib/sms/offer.ts`). The text says "a change is drafted and the team
+# reviews it next". The sweep texts an owed person only while the gap and its own run are in one
+# of these states and no person has decided that run. A gap alone keeps `awaiting_approval` after
+# the decision, until the merge and the deployment end; a run alone says `pr_open` before the
+# pull request exists.
+DRAFT_OPEN = ("pr_open", "awaiting_approval")
+_DRAFT_OPEN = f"in.({','.join(DRAFT_OPEN)})"
+
+# The gap's own run (`feature_request_group.escalation_id`): the full run that was attached to
+# the gap last. It is not any run of the gap. A run that only carried a new count can stay at
+# `awaiting_approval` with no approval after it failed (`pipeline.fail`), and an older draft can
+# stay not decided after a newer one was approved. The gap has three relations to `escalation`
+# (this one, `issue_claim`, and `escalation.group_id`), so the select names the column.
+_OWN_RUN = "escalation!escalation_id!inner(id)"
+
+
+def _subscriber(project_id: str, group_id: str, subscriber_id: str) -> dict[str, str]:
+    """One person's row, and only if it belongs to this project and this gap."""
+    return {"id": f"eq.{subscriber_id}", "project_id": f"eq.{project_id}", "group_id": f"eq.{group_id}"}
+
+
+def notice_names(project_id: str, group_id: str) -> tuple[str, str]:
+    """What a text names: the company the person knows, and the gap's title."""
+    project = _check(
+        retry.send(
+            "GET",
+            _url("project"),
+            params={"id": f"eq.{project_id}", "select": "name"},
+            headers=_headers(),
+            timeout=SUBSCRIBER_TIMEOUT,
+        )
+    )
+    group = _check(
+        retry.send(
+            "GET",
+            _url("feature_request_group"),
+            params={"id": f"eq.{group_id}", "project_id": f"eq.{project_id}", "select": "title"},
+            headers=_headers(),
+            timeout=SUBSCRIBER_TIMEOUT,
+        )
+    )
+    company = (project[0].get("name") if project else None) or ""
+    title = (group[0].get("title") if group else None) or ""
+    return str(company), str(title)
+
+
+def owed_subscribers(project_id: str, group_id: str, limit: int) -> list[dict[str, Any]]:
+    """The people who agreed to a text about this gap and have not had it, oldest first."""
+    response = retry.send(
+        "GET",
+        _url("gap_subscriber"),
+        params={
+            "project_id": f"eq.{project_id}",
+            "group_id": f"eq.{group_id}",
+            "notified_at": "is.null",
+            "phone_sealed": "not.is.null",
+            "select": "id,phone_sealed",
+            "order": "created_at.asc",
+            "limit": str(limit),
+        },
+        headers=_headers(),
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    return _check(response) or []
+
+
+def claim_subscriber(project_id: str, group_id: str, subscriber_id: str) -> bool:
+    """Take one person for this run. False when a different run already took them.
+
+    One conditional update on `notified_at`, the same shape as `claim_issue_slot`. It is made one
+    time: an update that is repeated after a lost answer comes back empty when the first one
+    landed, and then nobody can say who holds the claim.
+    """
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params={**_subscriber(project_id, group_id, subscriber_id), "notified_at": "is.null", "select": "id"},
+        headers=_headers("return=representation"),
+        json={"notified_at": _now()},
+        timeout=SUBSCRIBER_TIMEOUT,
+        attempts=1,
+    )
+    return bool(_check(response))
+
+
+def release_subscriber(project_id: str, group_id: str, subscriber_id: str) -> None:
+    """Give the claim back after a text that was refused, so the text is still owed.
+
+    It is made one time. A release that is repeated after a lost answer can free a claim that a
+    different run took in between, and that run's person would then get a second text.
+    """
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params=_subscriber(project_id, group_id, subscriber_id),
+        headers=_headers("return=minimal"),
+        json={"notified_at": None},
+        timeout=SUBSCRIBER_TIMEOUT,
+        attempts=1,
+    )
+    _check(response)
+
+
+def erase_subscriber_phone(project_id: str, group_id: str, subscriber_id: str) -> None:
+    """Erase the number after a text was sent, or may have gone. The claim stays."""
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params=_subscriber(project_id, group_id, subscriber_id),
+        headers=_headers("return=minimal"),
+        json={"phone_sealed": None},
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    _check(response)
+
+
+def forget_stale_subscribers(project_id: str, claimed_before: datetime) -> None:
+    """Erase the numbers of the project's claims that are older than any send can be."""
+    response = retry.send(
+        "PATCH",
+        _url("gap_subscriber"),
+        params={
+            "project_id": f"eq.{project_id}",
+            "notified_at": f"lt.{claimed_before.isoformat()}",
+            "phone_sealed": "not.is.null",
+        },
+        headers=_headers("return=minimal"),
+        json={"phone_sealed": None},
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    _check(response)
+
+
+def owed_gaps(limit: int) -> list[dict[str, Any]]:
+    """The gaps with an open draft that no person decided, and a person who is owed a text.
+
+    The gap that was seen longest ago is first. It is one query for the whole deployment, as a
+    runner serves each project. Each inner join keeps a gap only when such a run and such a
+    person exist, and one row of the people is enough to know it. Each pass that follows is
+    scoped to the gap's own project.
+    """
+    response = retry.send(
+        "GET",
+        _url("feature_request_group"),
+        params={
+            "status": _DRAFT_OPEN,
+            "select": f"id,project_id,{_OWN_RUN},gap_subscriber!inner(id)",
+            "escalation.status": _DRAFT_OPEN,
+            "escalation.mode": "eq.full",
+            "escalation.approval": "is.null",
+            "gap_subscriber.notified_at": "is.null",
+            "gap_subscriber.phone_sealed": "not.is.null",
+            "gap_subscriber.limit": "1",
+            "order": "last_seen.asc,id.asc",
+            "limit": str(limit),
+        },
+        headers=_headers(),
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    return _check(response) or []
+
+
+def draft_still_open(project_id: str, group_id: str) -> bool:
+    """True while the draft of one gap is still open and not decided.
+
+    The sweep asks it again just before the pass: the list is read one time, and the pass of a
+    gap can come minutes later.
+    """
+    response = retry.send(
+        "GET",
+        _url("feature_request_group"),
+        params={
+            "id": f"eq.{group_id}",
+            "project_id": f"eq.{project_id}",
+            "status": _DRAFT_OPEN,
+            "select": f"id,{_OWN_RUN}",
+            "escalation.status": _DRAFT_OPEN,
+            "escalation.mode": "eq.full",
+            "escalation.approval": "is.null",
+            "limit": "1",
+        },
+        headers=_headers(),
+        timeout=SUBSCRIBER_TIMEOUT,
+    )
+    return bool(_check(response))
+
+
 def emit_trace(
     project_id: str,
     escalation_id: str | None,
@@ -204,14 +401,19 @@ def claim_queued_local() -> dict[str, Any] | None:
     return claimed[0] if claimed else None
 
 
-def heartbeat(project_id: str, engine: str = "local") -> int | None:
-    """The console shows the worker as online when one of these arrived in the last two minutes."""
+def heartbeat(project_id: str, engine: str = "local", sms: bool = False) -> int | None:
+    """The console shows the worker as online when one of these arrived in the last two minutes.
+
+    `sms` says if this worker can send a text message. The web app offers the one text about a gap
+    only when the last heartbeat says so (`apps/web/lib/sms/offer.ts`), because this process sends
+    that text and the web app cannot see its environment.
+    """
     return emit_trace(
         project_id,
         None,
         "status",
         "worker online",
-        detail={"engine": engine, "at": _now()},
+        detail={"engine": engine, "at": _now(), "sms": sms},
     )
 
 

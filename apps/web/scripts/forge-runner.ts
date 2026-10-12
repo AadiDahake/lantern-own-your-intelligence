@@ -20,7 +20,11 @@ import {
   runClaimedRun,
   type ForgeQueueRow,
 } from "../lib/forge/queue";
-import { claimQueuedExploration, runClaimedExploration } from "../lib/graph/jobs";
+import { smsSender } from "../lib/env";
+import { beatOnce, HEARTBEAT_MS } from "../lib/forge/heartbeat";
+import { claimQueuedExploration } from "../lib/graph/jobs";
+import { runClaimedExploration } from "../lib/graph/run-exploration";
+import { runDraftSweeps } from "../lib/sms/subscribers";
 
 const POLL_MS = 2_000;
 
@@ -78,8 +82,25 @@ async function tick(): Promise<boolean> {
   return found;
 }
 
+/**
+ * Says that this runner is live, and if it can send a text. The variables are read on each beat,
+ * so what the heartbeat says is what a notice of this moment would do. A failed beat is logged
+ * and the next one is tried: no heartbeat only means that the text is not offered.
+ */
+async function beat(): Promise<void> {
+  try {
+    await beatOnce({ sms: smsSender().configured });
+  } catch (error) {
+    say(`heartbeat failed: ${(error as Error).message}`);
+  }
+}
+
 async function main(): Promise<void> {
-  say("forge runner polling for queued runs, decisions and explorations");
+  say("forge runner polling for queued runs, decisions, explorations and owed texts");
+  void beat();
+  setInterval(() => void beat(), HEARTBEAT_MS).unref();
+  // A later pass for each person who is still owed a text while a draft is open (`lib/sms/sweep.ts`).
+  runDraftSweeps(say);
   let stopping = false;
   process.on("SIGINT", () => {
     stopping = true;

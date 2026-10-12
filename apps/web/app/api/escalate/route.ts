@@ -5,13 +5,42 @@ import { emitTrace } from "@/lib/trace";
 import { reportRequest } from "@/lib/agent/requests";
 import { assertEngineAvailable } from "@/lib/agent/runner";
 import { triggerDiscovery } from "@/lib/opportunity/queue";
-import type { EscalateRequest, FeatureRequest } from "@lantern/shared";
+import { subscribeToGap } from "@/lib/sms/subscribe";
+import { toE164 } from "@lantern/shared";
+import type { EscalateRequest, EscalateResponse, FeatureRequest } from "@lantern/shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export function OPTIONS(): Response {
   return preflight();
+}
+
+type Notify = { ok: true; phone: string | null } | { ok: false; reason: string; error: string };
+
+/**
+ * The number a person asked to be texted on, or null when the report asks for no text.
+ *
+ * A number is stored only with the person's consent, so `notify` without `consent: true` is
+ * refused, and so is a value that is not a phone number with its country code. Both are refused
+ * before anything is written: a report that asked for a text must not go through as a report
+ * that silently has none.
+ */
+function readNotify(value: unknown): Notify {
+  if (value === undefined || value === null) return { ok: true, phone: null };
+  const notify = typeof value === "object" ? (value as { phone?: unknown; consent?: unknown }) : {};
+  if (notify.consent !== true) {
+    return { ok: false, reason: "consent_required", error: "notify needs consent: true" };
+  }
+  const phone = typeof notify.phone === "string" ? toE164(notify.phone) : null;
+  if (!phone) {
+    return {
+      ok: false,
+      reason: "invalid_phone",
+      error: "notify.phone must be a phone number with its country code, for example +14155550123",
+    };
+  }
+  return { ok: true, phone };
 }
 
 export async function POST(request: Request): Promise<Response> {
@@ -29,6 +58,10 @@ export async function POST(request: Request): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as Partial<EscalateRequest>;
   if (!body.key || !body.messageId) {
     return withCors(Response.json({ error: "key and messageId are required" }, { status: 400 }));
+  }
+  const notify = readNotify(body.notify);
+  if (!notify.ok) {
+    return withCors(Response.json({ error: notify.error, reason: notify.reason }, { status: 400 }));
   }
 
   const db = serviceClient();
@@ -95,6 +128,18 @@ export async function POST(request: Request): Promise<Response> {
     trigger: "user",
   });
 
+  // The person asked for the one text about this gap. The report is recorded by now, and what
+  // becomes of the text never changes that. The trace gets the state and never the number.
+  const text = notify.phone
+    ? await subscribeToGap({
+        projectId: String(project.id),
+        groupId: reported.group.id,
+        messageId: body.messageId,
+        phone: notify.phone,
+        status: reported.group.status,
+      })
+    : null;
+
   await emitTrace({
     projectId: String(project.id),
     groupId: reported.group.id,
@@ -108,15 +153,16 @@ export async function POST(request: Request): Promise<Response> {
       reportCount: reported.group.reportCount,
       userReportCount: reported.group.userReportCount,
       priority: reported.group.priority,
+      ...(text ? { textNotice: text } : {}),
     },
     source: "agent",
   });
 
-  return withCors(
-    Response.json({
-      escalationId: reported.escalationId,
-      groupId: reported.group.id,
-      status: "queued",
-    }),
-  );
+  const answer: EscalateResponse = {
+    escalationId: reported.escalationId,
+    groupId: reported.group.id,
+    status: "queued",
+    ...(text ? { notify: text.state } : {}),
+  };
+  return withCors(Response.json(answer));
 }

@@ -132,6 +132,31 @@ create table feature_request_group (
   last_seen timestamptz not null default now()
 );
 
+-- A person who agreed to one text message when the draft change for a gap opens (migrations 0019
+-- and 0020). No row exists without that consent. The number is sealed in the format of
+-- `project.github_token` under its own key, and it is set to null after the text is sent. One
+-- answer stores one number: `message_id` is unique. See "The text notice".
+create table gap_subscriber (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references project on delete cascade,
+  group_id uuid not null references feature_request_group on delete cascade,
+  phone_sealed text,                       -- AES-256-GCM 'iv.ciphertext.tag'; null after the text is sent
+  phone_digest text not null,              -- keyed hash of the number: one number is one row for one gap
+  consent_at timestamptz not null,         -- when the person agreed to the text
+  notified_at timestamptz,                 -- the claim, set before the send; null while a text is owed
+  created_at timestamptz not null default now(),
+  message_id uuid references message on delete set null,   -- the answer whose card took the number
+  unique (group_id, phone_digest)
+);
+create unique index gap_subscriber_message_idx on gap_subscriber (message_id) where message_id is not null;
+
+-- The newest heartbeats of one project's runners, newest first, with the age of each one on the
+-- database's clock (migration 0020). The web app offers the text from this. The title is a
+-- constant in the function, so each plan can use the partial index.
+create index trace_event_worker_online_idx on trace_event (project_id, id) where title = 'worker online';
+create function runner_heartbeats(p_project uuid)
+  returns table (engine text, sms boolean, age_seconds double precision);
+
 create table trace_event (
   id bigserial primary key,                -- the SSE event id and cursor
   project_id uuid not null references project on delete cascade,
@@ -452,6 +477,13 @@ export type PlanSource = "graph" | "cached" | "page" | "memory";
 export type PlanSummary = { source: PlanSource; total: number; destination?: { route: string; title: string } };
 export type AnswerSource = { title: string; url: string | null };
 
+// A service outside the product that lists the capability a visitor asked for. See "Outside services".
+export type Alternative = {
+  name: string;       // the capability as the service names it; it says the asked capability word for word
+  provider: string;   // who offers it
+  url: string;        // the listing's public page; https, built by the server from two ids
+};                    // no description: a stranger's sentences do not go under a company's name
+
 export type ProbeName = "docs" | "interface" | "repository";
 export type ProbeResult = {
   probe: ProbeName;
@@ -510,11 +542,12 @@ export type ChatEvent =
       type: "answer";
       text: string;
       steps: Step[] | null;
-      escalation: EscalationOffer;   // { offered: true, request } | { offered: false, reason? }
+      escalation: EscalationOffer;   // { offered: true, request, textNotice?: true } | { offered: false, reason? }
       noted?: boolean;               // the gap was recorded for the developers without being asked
       plan?: PlanSummary;            // where the steps came from and the count, fixed for the walk
       sources?: AnswerSource[];      // the help articles the answer cites
       routeChanged?: boolean;        // a continuation changed the route, so the count changed
+      alternatives?: Alternative[];  // only with a verdict of absent; left out when no listing passed the gate
     }
   | { type: "error"; message: string };
 
@@ -589,6 +622,7 @@ Also exported:
   affordance ranking, so page-side ranking and server-side scoring always agree.
 - `MODELS` and `EFFORT`, the model ids and reasoning efforts in section 5, and
   `EMBED_DIMENSIONS` and `DEFAULT_VOICE` beside them.
+- `AGENT_SEARCH`, the path and the caps of the agent search in section 5.
 
 ## 3. HTTP API
 
@@ -614,7 +648,7 @@ with `Authorization: Bearer <token>` resolves to the project whose slug is
 | `GET /api/site/explore` | - (console) | `{job: ExploreJob \| null}`: the newest job, `{id, siteUrl, status: queued \| running \| done \| failed, summary, error, createdAt, startedAt, finishedAt}`; the console polls it |
 | `GET /api/site/map` | - (console) | `{graph, routes, siteUrl}`: the site graph with last-seen times and the known routes |
 | `POST /api/documents/import-help` | - (console) | `{documents: Document[], pages}`; imports the help pages the graph knows (or a sitemap) as one document per article |
-| `POST /api/escalate` | `{key, conversationId, messageId, visitorId?}` | `{escalationId, groupId, status}`, or 409 `{error, reason: "no_repository"}` when the project has no repository bound |
+| `POST /api/escalate` | `{key, conversationId, messageId, visitorId?, notify?: {phone, consent: true}}` | `{escalationId, groupId, status, notify?: "subscribed" \| "not_needed" \| "unavailable"}`; `notify` is in the answer only when it was in the request. 409 `{error, reason: "no_repository"}` when the project has no repository bound. 400 `{error, reason: "consent_required" \| "invalid_phone"}` for a `notify` with no `consent: true` or with a number that has no country code; nothing is written. See "The text notice" |
 | `GET /api/escalations/:id` | `?key=` required, must be the escalation's project | `{id, status, issueUrl, prUrl, deploymentUrl, request, approval, createdAt}` |
 | `POST /api/transcribe` | multipart `key`, `file` (audio/webm or mp3) | `{text}` |
 | `POST /api/speak` | `{key, text}` | `audio/mpeg` bytes, streamed as the TTS deltas arrive |
@@ -674,6 +708,13 @@ The console renders these specially and falls back to a key/value list for anyth
 | `capability` | one `CompilerEvent` from `@lantern/capability`: `{stage, title, detail, at}`; the `Chosen:` event's detail carries `rejected_too_low`, `rejected_too_high` and `coverage` |
 | `artifact` (pipeline) | `"capability_spec"` -> `{id, version, intent, summary, session_count, median_manual_actions, median_interactions, scenarios, constraints, actions, opportunity_id}`; `"replays"` -> `{linked, checked, failed}`; `"outcome"` -> `{source, intent, eligible, used, succeeded, median_actions_before, median_actions_after, support_before, support_after, support_change_pct}` |
 | `tool` (pipeline) | `{tool: "hogql", transport: "rest", args_summary, result_summary, sessions, matching_sessions, median_manual_actions, median_interactions, window_days, queries: [{name, rows, durationMs, cached}]}` |
+| `status` (text notice) | `{notice: "draft_sms", state: "off" \| "failed" \| "done", reason?, asked?, sent?, unconfirmed?, taken?, reasons?: string[]}`; `taken` counts the people a different run claimed at the same moment, and `reasons` are short codes (`rate_limited`, `http_400`, `timeout`, `unreachable`, `pass_limit`). Never a phone number and never the provider's own words |
+| `status` (text notice, later pass) | The same shape with `pass: "later"`, titled "Text notice, later pass: ...". The sweep of a runner writes it, into the trace of the run whose draft is open. One more state: `{notice: "draft_sms", pass: "later", state: "waiting", reason}` when the provider did not answer the read-only question, so nothing was sent; `reason` is a short code (`http_503`, `timeout`, `unreadable_answer`) |
+| `tool` (outside services) | `{tool: "agent_search", transport: "rest", args_summary, result_summary, search: "agents", state: "done" \| "late" \| "failed" \| "dropped" \| "abandoned", found?, named?, startable?, offered?: Alternative[], near?: [{name, provider, why}], reason?, latencyMs?, waitedMs?}`, titled "Outside services: ...". `args_summary` is the query that left the product, and it is the capability name. `near` names at most 3 listings that are named for the capability and were not offered, with the reason; a name that cannot be shown is left empty there. `reason` is a short code (`timeout`, `http_503`, `rate_limited`, `unreadable_answer`) and never the provider's own words |
+| `decision` (outside services) | `{search: "agents", state: "off" \| "skipped", reason}`, titled "Outside services: off" or "Outside services: not searched". Nothing was sent. Written only on a turn whose verdict is `absent`. Its kind is not `status`, for the reason in the next row |
+| `decision` (text offer) | `{notice: "draft_sms", offer: "on" \| "off", reason?}`, titled "Text notice: offered with the report" or "Text notice: not offered". One row for each answer that offers a report. Its kind is not `status`, because the console reads the newest `status` row as the worker's heartbeat |
+| `decision` "The user asked for this to be reported" | the feature request, `groupId`, the counts and the priority, and `textNotice: {state, reason?}` when the report asked for the text. Never a phone number |
+| `status` "worker online" | `{engine: "local" \| "forge", at, sms}`: a runner's heartbeat, one row for each project every 60 seconds. The worker writes it for `local` and the forge runner writes it for `forge`. `sms` is true when that runner has both text message variables, and the web app offers the text only from these rows |
 
 Forge rows carry `source: "forge"`; the persona's `tool`, `artifact` and `model` rows are titled
 `<Persona> (<candidate>): ...`, and a `file_change` artifact is `{artifact: "file_change", files: [{path, kind}]}`.
@@ -811,6 +852,9 @@ group id. Two rows land on the conversation that triggered the run with `source:
      Draft the `FeatureRequest` with `MODELS.answer` and a JSON schema: an imperative title of at
      most 8 words, a description of two or three sentences, an area, `quote` set to the user's exact
      words (verified to be a substring of the user message, otherwise empty), and a rationale.
+     When the agent search is on, the answer can also carry `alternatives`: services outside the
+     product that list this capability and can start now. The words of the answer do not change.
+     See "Outside services".
 
    Persist the assistant message with its steps, probes, verdict and feature request. Emit `answer`.
 8. Every stage writes `trace_event` rows, which is what makes the console's Activity page show the
@@ -888,6 +932,303 @@ the run that owns the group when there is one, so a second reporter follows the 
 request rather than a run of their own. Under `local` the insert is the whole handover: the worker's
 runner polls for rows with `status = 'queued'` and `engine = 'local'` and reads the group off
 `escalation.group_id`.
+
+### Outside services
+
+When every check comes back empty, the product has nothing to show the visitor. A turn can then
+look in a public index of agents and services for one that already does the job, so the visitor
+has a way to go on today. `apps/web/lib/alternatives` is the rule, `apps/web/lib/darwin.ts` is the
+only module that calls the index, and the search is off unless the deployment turned it on
+(`DARWIN_API_KEY`, or `LANTERN_DARWIN=public`), because a search sends the name of the missing
+capability to a different company.
+
+**The search never costs the visitor time.** It starts when `routeProbes` says `absent`, and it
+runs beside the verdict and the drafted request, which the turn waits for in each case. When the
+answer is ready the turn reads the search one time (`take`) and does not wait: a search that has
+not answered is stopped, and the answer goes out with no `alternatives`. A search has 8 seconds
+at most (`AGENT_SEARCH.timeoutMs`). No outcome of the search can fail the turn. A turn that fails,
+or whose reader leaves, after the search started ends the search too (`abandon`), and the trace
+says so.
+
+**The capability name leaves the product whole, or not at all** (`queryFor`). The query is the
+`feature` from the reading of the message, never the message and never the page. A name with one
+word taken out says a different thing ("enabling 2FA login" is not "enabling login"), so one word
+that can be private stops the search:
+
+| The name is not sent when a word | Because it can be |
+|---|---|
+| has a digit, a mark, a dot, or a letter that is not one of the 26 | a booking code, a phone number, an email, an address |
+| starts with a capital and is not the first word, or is the first word and does not end in "ing" | a person, a place, a brand |
+| is in capitals and longer than 4 letters, or has 4 letters or more and no vowel | a code |
+
+A name of fewer than 2 words (articles do not count), of more than 8 words, or of more than 120
+characters is not sent either. A short word in capitals ("SMS", "CSV") is a plain word.
+
+**An offer is made only for a confirmed absence, and a listing must pass each rule** (`gate`). An
+offer points a person at a service that nobody at the company has tried, so a wrong one costs more
+than no offer. The index itself is no filter: it answered a query of three nonsense words with a
+full page of listings, each one from a verified service.
+
+| Rule | What it reads | Why |
+|---|---|---|
+| It is named for the capability | `sameName`: the listing's own name and the capability name have the same words in the same order. Only an article and a word such as "my" are left out, word endings are taken off ("setting" and "set", "codes" and "code"), and no synonym is joined. The description is never read | Words that only look alike are not enough. "Export customer contacts" has each noun of "importing customer contacts", "Book a flight" has each noun of "canceling a flight booking", and "Turn off notifications" differs from "turning on notifications" by one small word. The product's own rule for a control (`coversCapability`) lets one concept differ and joins synonyms, which is right for the labels of one product |
+| It can start now | The index says `readiness: "ready"` and `canStartThread: true` | The public page of a listing that is not ready tells a person that it cannot start. `authentication_required` is not "now" |
+| It needs no payment | `executionRequirements.payment.state` is not `REQUIRED` | A route that costs money is not what the offer says |
+| The service is known | The index says `verified: true` | The offer stands under a company's name |
+| Both names can be shown | `shownName` and `shownService`: letters, digits and a few marks of the plain set, no dot between letters, no `//`, fewer than 7 digits; a service name has at most 40 characters and 5 words and at least 2 letters | A name can carry an address or a phone number, a letter of a different script can look like a different letter, and some characters show as nothing |
+| One for one service, 2 in total | The index's own order is kept; a service is its name | A short list is read; a long one is not |
+
+**Nothing from outside is trusted.** Each listing is read into a checked shape, and its words lose
+each control, invisible and direction character and are cut. An offer has two names and a link,
+and no sentence of the listing. The link is never taken from the answer: it is built from the two
+ids of the listing, which must have a fixed form, on the index's own host. A redirect is not
+followed, the answer is read up to 512 kB, and a `200` that is not the index's own shape is a
+failure and not "no service".
+
+**The trace says what happened**, in one row for each search that started and for each turn that
+would have offered one (the shapes are in section 3):
+
+| State | Title | When |
+|---|---|---|
+| `off` | "Outside services: off" | The verdict is `absent` and the search is not configured. Nothing was sent |
+| `skipped` | "Outside services: not searched" | The verdict is `absent` and the capability name must not leave the product. Nothing was sent |
+| `done` | "Outside services: 1 offered of 7 found", "... none offered of 7 found", "... none found" | The index answered in time. The row counts the listings found, the ones that are named for the capability and the ones that can start, and it names up to 3 that are named for it and were not offered, with the reason |
+| `late` | "Outside services: no answer in time" | The answer was ready first, so the search was stopped |
+| `failed` | "Outside services: the search failed" | No usable answer, with a short reason code |
+| `dropped` | "Outside services: not needed, the absence was not confirmed" | The three checks were empty and the verdict then said `hedge`. The capability name did go out; nothing is offered |
+| `abandoned` | "Outside services: the turn ended before the result was read" | The turn failed, or its reader left, after the search started. The capability name did go out |
+
+What is not built, and what is known:
+
+- The widget does not show `alternatives` yet. Until it does, the row in the console's Activity
+  page is where the result can be read.
+- On 2026-10-11 each of 110 listings in 26 answers of the public index had `readiness:
+  "unavailable"`. So a visitor is offered nothing today, and the `done` row names the listings
+  that are named for the capability and cannot start. The gate needs no change when the index
+  marks a listing as ready.
+- A service outside the product cannot work with the visitor's data in the product (a booking, an
+  account) unless it says so. The gate cannot know this. The words that the widget puts next to
+  an offer must say that the service is a different company's.
+- The name rule refuses most listings that do the job under a different name ("Weather forecast"
+  for "checking the weather forecast"). That is the side on which it is meant to be wrong.
+- The query rule cannot know a name or a code that is written as plain small words ("john
+  smith").
+- `shownService` cannot know that a service name copies the company's own.
+- The switch is for the whole deployment, not for one project.
+- In a call, the answer is spoken from its words, which do not name an alternative.
+
+### The text notice
+
+A person who reported a gap can agree to one text message when the draft change for it opens.
+`gap_subscriber` holds one row for each person and gap. `apps/web/lib/sms` is the rule, and
+`apps/web/lib/dial.ts` is the only module in the web app that calls the provider. The worker has
+the same rule in `services/worker/steps/sms_notice.py`, and `steps/dial.py` is the only module
+there that calls the provider.
+
+- **Who sends it.** The engine that opens the draft pull request. The forge engine sends it
+  through `notifyDraft` in `ForgeDeps`, wired in `lib/forge/queue.ts`. The `local` engine's worker
+  sends it in `open_draft_pr` (`steps/pipeline.py`), after it tells Slack. Each engine reads its
+  own environment, so under `local` the two variables must be set where the worker runs.
+- **Who is offered the text.** The answer event carries `escalation.textNotice: true` only when
+  the runner that sends the text says that it can, and the gap is not past its draft
+  (`lib/sms/offer.ts`). The sender is a process with its own environment: the worker under
+  `local`, the forge runner under `forge`. Each one writes a heartbeat every 60 seconds with
+  `sms: true` or `sms: false`. The offer is on when the runner of the engine that
+  `ESCALATION_ENGINE` names has a heartbeat of at most 3 minutes that says true, and no other
+  live runner says false (a forge run can be started from the console under `local`). The web
+  app's own two variables decide nothing, so a web app that has them and a runner that does not
+  make no promise. The heartbeats are read through `runner_heartbeats`, which measures each age
+  on the database's clock. A read that fails means no offer. The trace says which it was, with
+  the reason. A runner that is started again without its variables is still read as "can send"
+  until its next heartbeat.
+- **Who writes a row.** `POST /api/escalate`, through `subscribeToGap` (`lib/sms/subscribe.ts`),
+  and nothing else. The widget's gap card shows one box that is not ticked, "Text me when a change
+  for this is drafted". With the tick it shows a number field and the sentence that the person
+  agrees to. The number leaves the widget only in the report request, as
+  `notify: {phone, consent: true}`. The route refuses a `notify` with no `consent: true` and a
+  number that `toE164` does not accept, before it writes anything. `toE164` (`@lantern/shared`)
+  removes spaces, hyphens, dots and brackets, removes a "(0)" directly after the country code,
+  refuses a "(0)" in any other place, and never guesses a country code.
+- **What the report answers.** The report is recorded first, and what becomes of the text never
+  fails it. The answer's `notify` is one of three states, and the card says each one in words.
+
+  | State | When | The number |
+  |---|---|---|
+  | `subscribed` | The row is stored and one text is owed or on its way | Sealed in `phone_sealed` |
+  | `not_needed` | The gap is `pr_open`, `awaiting_approval`, `shipped` or `rejected`. Each of these comes after a draft pull request, so a change was drafted already and no text will come | Not stored by this report |
+  | `unavailable` | No runner can send the text now, a limit is reached, the answer already stored a different number, the gap is gone, or a query failed | Not stored by this report |
+
+  The card says "this report did not save your number" for the last two. That is the exact
+  claim: an earlier report of the same person can still have a number stored for the same gap.
+  The line "You will get one text" stays on the card only while the report is before `pr_open`.
+- **A row that no run will see is taken back.** The run sets the gap to `pr_open` before it reads
+  who is owed a text. `subscribeToGap` writes the row first and reads the gap's state second. If
+  the row was written too late for the run to see it, the state read is `pr_open` or later, and the
+  row is deleted while no run holds it. If a query fails after the write, the row is deleted too.
+  A request deletes only the row of its own answer (`message_id`), so it cannot break the promise
+  that an earlier answer made. When nothing was deleted, the row is read: a row that still holds
+  a number is owed a text or on its way to one, and the answer is `subscribed`.
+- **Three limits bound what a caller can make the company send.** The embed key is public, and
+  nothing proves that a number belongs to the caller. So: one answer stores one number
+  (`message_id` is unique), one gap holds at most 50 people who are owed a text (`GAP_LIMIT`, the
+  number that one pass reaches in its 60 seconds), and one project takes at most 100 new numbers
+  in 24 hours (`DAY_LIMIT`). The two counts are read before the write and do not look at the
+  number, so the answer does not say if a number was known before. What stays possible: a caller
+  who asks 100 real questions in one day can make the company text 100 numbers that are not the
+  caller's, one time each. A code that proves the number is the fix, and it is not built.
+- **A person who asks again is texted again.** A row whose text ended (sent, never confirmed, or
+  claimed more than 15 minutes ago by a run that stopped) is armed again with the new number and a
+  new `consent_at`. A row whose text is owed or on its way is left as it is. So the rule is one
+  text for one consent.
+- **One gap is one text for one person.** The send call has no idempotency key, so a second call
+  is a second text. A sender claims a person first, with one conditional update that sets
+  `notified_at` only where it is null, and sends only when the update returned the row. The client
+  makes one attempt and nothing repeats it.
+- **How a send ends.** There are three results, and the client decides which one applies
+  (`sendSms`, and `send_sms` in the worker).
+
+  | Result | When | What the store does |
+  |---|---|---|
+  | `sent` | A 2xx whose body is the provider's own answer, `{message: {...}}` | `phone_sealed` is set to null. The claim stays. |
+  | `refused` | Nothing was sent: any 4xx, a redirect other than a 303 (never followed), or a request that could not leave (connection refused, no such host, a base address that is not a URL) | `notified_at` goes back to null, so the text is still owed. The number stays. |
+  | `unconfirmed` | The text may have gone: a 5xx, a 303 (it says "done, see there"), a timeout, a connection that broke, or a 2xx that is not the provider's answer (a page from a wrong address) | The claim stays and the number is erased, so nobody sends it again. |
+
+  The worker's client reads three more failures as `refused`, because its HTTP library can tell
+  that nothing was sent: a connection that did not open in time (to the provider or to a proxy in
+  front of it), a certificate that is not trusted (`untrusted_certificate`; the request is written
+  only after that check), and a key that cannot be a header (`bad_api_key`). In both engines a
+  timeout after the connection opened is `unconfirmed`, and so is an answer whose headers cannot
+  be read: the provider took that request. The worker also reads a status under 200 as
+  `unconfirmed`: its library can take an interim answer (a 102) for the last one. The worker reads
+  the body of an answer for at most 10 seconds and 64 kB, and a body it cannot read does not
+  change what the status says. A message id is kept only when it is a short token; any other
+  value is the provider's free text.
+
+- **When a pass stops.** At a refusal that is not about the person (`forAll`: 401, 402, a
+  redirect, an address that cannot be reached) and at an `unconfirmed` result: the next send is
+  expected to end the same way. The people who are left stay unclaimed, so a provider outage costs
+  one person their text and not everyone. A pass also stops after 200 people (`PASS_LIMIT`) or 60
+  seconds (`PASS_BUDGET_MS`), because the run waits for it; the trace row then says `pass_limit`
+  or `time_budget`. Every query of the store has a 10 second limit.
+- **What the worker repeats, and what it does not.** The send is one attempt in both engines,
+  and so is the read-only question of the sweep: no call to the provider goes through
+  `steps/retry.py`. The worker's store
+  calls do go through it, each request with the 10 second limit: a read and the erase of a number
+  are repeated after a blip, because a second one changes nothing. The claim and the release of a
+  claim are made one time. A claim that is repeated after a lost answer comes back empty when the
+  first one landed, and then nobody can say who holds the person. A release that is repeated can
+  free the claim of a run that took the person in between.
+- **The sweep: a later pass while the draft is open.** The pass at the draft runs one time, and
+  the automatic path starts one draft for a gap (`actionFor` starts no second one; a person can
+  start a forge run for a gap from the console at any time). The worker runs the pass in a
+  `finally` once the pull request is open, so a step that fails after that point (the comment on
+  the pull request, a trace row) does not skip it. A person who is still owed after it (a refusal
+  for that person, a pass that stopped at a failure, the 60 second budget) is texted by the sweep.
+  Each runner that has both variables sweeps every 5 minutes, and for the first time 5 minutes
+  after it starts (`lib/sms/sweep.ts` in the forge runner, `steps/sms_sweep.py` in the worker;
+  the forge runner starts a sweep each 5 minutes, and the worker waits 5 minutes after a sweep
+  ends). A runner sweeps the drafts of each engine, not only its own. Each gap in the list gets
+  the same pass, and the claim is the same, so a sweep and a run, or two runners, give one text
+  for one consent.
+- **Which gaps the sweep reads.** One query (`owedGaps`, `owed_gaps`) reads at most 1000 gaps
+  (`SWEEP_GAPS`) for which three things are true: the gap is `pr_open` or `awaiting_approval`;
+  the gap's own run (`feature_request_group.escalation_id`) is a full run, is `pr_open` or
+  `awaiting_approval`, and has no `approval`; and a person of the gap is owed. The gap's state
+  alone is not enough: it stays `awaiting_approval` from the moment a person decides until the
+  merge and the deployment end, and for good when one of those fails. The text says "the team
+  reviews it next", so it does not go out after a person decided the gap's own run. The run's
+  state alone is not enough either: the worker sets it to `pr_open` before the pull request
+  exists. And the run must be the gap's own, the full run that was attached to the gap last
+  (`attachRun`), not any run of the gap: the worker leaves a run that only carried a new count
+  at `awaiting_approval` when that run fails while the gap has a pull request (`pipeline.fail`),
+  and an older draft can stay not decided after a newer one was approved. The sweep asks the
+  same thing about one gap again just before that gap's pass (`draftStillOpen`), because the
+  list is read one time and a pass can come minutes later. A draft that a person closed or
+  merged on GitHub by hand is not known to Lantern, and its people are still texted.
+- **A later try must not cost more people than it helps.** Four rules hold that. The waits are
+  in the memory of the runner and are measured on a clock that only goes forward. A runner that
+  starts again starts with no wait, which is why its first sweep comes 5 minutes after the start:
+  a runner that stops within 5 minutes of each start sweeps nothing.
+
+  | When | What the sweep does |
+  |---|---|
+  | The provider does not answer one read-only question (`GET /api/v1/numbers`: any status but 2xx, no answer, or a 2xx that is not `{numbers: [...]}`) | It claims no one and sends nothing, and it asks again at the next sweep. An outage, a wrong address and a key that stopped working cost no person their text |
+  | A text has no confirmed answer (`unconfirmed`) | That person is not texted again. The sweep stops, and no gap is tried for 10 minutes, then 2 times as long each time, up to 6 hours. One confirmed text ends the wait. The gap of that text also waits by itself, and the due gaps are tried by their own wait, the shortest first. So the gap that caused the stop is not the first try after the wait. With several such gaps ahead of a good gap in the list, the good gap waits one step for each of them |
+  | A send is refused for a cause that is not the person (`forAll`: no credit, a key that the provider does not take) | The sweep stops and waits in the same way. No person loses anything, and one try for each wait is enough to see the cause end. The gap gets no wait of its own |
+  | A pass left people and confirmed no text (the provider refuses the number each time, or the list could not be read) | That gap waits by itself in the same way: 10 minutes, 20, 40, up to 6 hours. It holds back no other gap that the sweep reads. A pass that confirmed a text is due again at the next sweep, and its wait starts from nothing |
+
+  A gap that is missing from a list keeps its wait and its last row: a different runner can hold
+  its one person for the moment of a send. A gap is forgotten when no list had it for more than
+  6 hours, counted from the first list without it. The pass at the draft does not ask the
+  question first, so an outage at that moment still costs one
+  person their text. The worker reads at most 1 MB of the answer to the question, so for an
+  account with more numbers than that fits, the worker's sweep sends nothing. A sweep sends at
+  any hour: the product does not know a person's time zone.
+- **One text for one consent, also in the sweep.** A person who asks again gets a new text for
+  the new consent. One narrow case follows from that: a person who was texted at the draft and
+  whose second request was read before the draft opened and stored after it has an owed row
+  while the draft is open. The take-back does not find that row, because the row keeps the id of
+  the first answer. The sweep texts it, so that person gets a second text for the second request.
+- **What a stopped run leaves.** A run that stops between the claim and the record of the send
+  leaves a claimed row with its number. A claim is held for seconds, so each pass first erases the
+  number of every claim of the project that is older than 15 minutes (`forgetStale`). A stored
+  value that does not open is skipped and is not erased: a runner with a different service role
+  key reads every number that way, and that mistake must not destroy what people gave.
+- **What the text says.** `draftNoticeText` in `@lantern/shared`: the company's name, the gap's
+  title, that a change is drafted and the team reviews it next, and that no more texts follow. It
+  does not say that the feature is live. `smsText` folds every text into the basic SMS alphabet,
+  because one character outside it lowers the provider's cap from 1530 to 670 characters and more
+  than doubles the segments of a long text. A character with no plain form is removed; it is never
+  replaced by a different meaning.
+- **A quoted name cannot be followed.** A gap's title starts as a visitor's words, and the text
+  goes out under the company's name. So the quoted company and title keep letters, digits, spaces,
+  an apostrophe, a comma and a hyphen. A dot, a slash, a colon and an at sign are removed, and so
+  is anything that reads as a phone number. A phone then has no link and no number to offer.
+- **What the trace says.** One `status` row for each draft pull request, written before the pull
+  request row: "Text notice: off" with the missing variable, "Text notice: no one asked for a text
+  about this request", "Text notice: 2 of 3 sent" (status `failed` when one was not sent), "Text
+  notice: a different run sent the texts", or "Text notice: could not read who asked for a text".
+  A notice that fails never fails the run. The sweep writes its rows into the trace of the gap's
+  own run: "Text notice, later pass: 1 of 2 sent", "Text notice, later pass: could not read who
+  is owed a text", or "Text notice, later pass: not sent yet, the text message provider did not
+  answer". A runner writes a row only when the row differs from the last one that it wrote for
+  that gap, so a number that is refused on each try gives one row and not one for each try. The
+  row about the provider is one row for as long as the provider does not answer, whatever the
+  reason of each try is. A later pass with no one to text writes no row. The runner's own log has a line for a sweep ("text sweep:
+  ...") when the line differs from the last one, and always when a text was sent.
+- **A phone number is never logged.** It is in the sealed column and in the request body to the
+  provider, and nowhere else: not in a trace row, an error, a reason code, or a console line.
+- **Two copies of one rule.** The text rules are in `packages/shared/src/sms.ts` and in
+  `services/worker/steps/sms_text.py`. `packages/shared/test/fixtures/sms-text.json` holds inputs
+  and the exact text each one becomes, and both test suites run every one of them, so a rule
+  changes in both files and in the fixture together. The rule of the sweep has the same proof:
+  `packages/shared/test/fixtures/sms-sweep.json` holds scenarios (the list of gaps, the provider's
+  answer and the outcome of each pass at a given minute, and what the sweep must do), and both
+  test suites run each step against their own copy. The fixture holds the rule only: the query,
+  the question to the provider and the timers have tests of their own in each suite. The sealed
+  number has it too: the
+  worker's `tests/test_seal.py` opens a value that `sealPhone` wrote. One difference is known. An
+  accented letter is folded with the Unicode data of the runtime, so a character that a newer
+  Unicode version added can fold to a letter in one runtime and to nothing in the other. Both
+  results are in the basic SMS alphabet.
+
+With `DIAL_API_KEY` or `DIAL_FROM_NUMBER` blank the notice is off, the table is not read, and the
+run is the same as before, plus the one trace row. The sweep is off too: it reads nothing, calls
+nothing and writes no row, and the runner's log says "text sweep: off" with the variable one
+time, 5 minutes after the start. The answer then has no `textNotice`, the card
+has no field, and the report is the same as before.
+
+What is not built. A person cannot take a request for a text back. A sealed number stays stored
+for as long as no draft opens and the gap is not deleted, for as long as the provider refuses the
+number while the draft is open, and after the draft was decided with the person still owed. When
+the database fails two times in one request (the write lands and the delete does not), the answer
+is `unavailable` and the row stays; the sweep texts that number if the draft is open. Each engine
+can fail to write the gap's state and go on (the forge engine logs it; the worker leaves the gap
+at `drafting`), so after such a failure a row can be stored for a gap whose draft is open, and
+the sweep does not see that gap. With no runner that
+has both variables, nothing is swept: the people of the open drafts wait until such a runner runs
+again. A claim carries the time of the runner that made it, so two runners whose clocks differ by
+15 minutes can erase the number of a claim that the other one holds at that moment.
 
 ### The local engine's draft
 
@@ -984,6 +1325,50 @@ Notes the API enforces:
 - Text to speech answers with chunked audio, so `POST /api/speak` yields each `audio/mpeg` chunk as
   it lands and playback starts before the utterance is complete.
 
+### Text messages
+
+The provider is Dial. `SMS` in `@lantern/shared` holds the two paths and the caps,
+`apps/web/lib/dial.ts` is the only module in the web app that calls it, and the base address is
+`DIAL_API_URL`. The worker has the same two pieces: `steps/sms_text.py` holds the two paths and
+the cap, and `steps/dial.py` is the only module in the worker that calls the provider. Nothing
+else names an endpoint.
+
+Chosen on **2026-10-11** by reading <https://docs.getdial.ai> and the OpenAPI document it links.
+
+| What | Value | Why |
+|---|---|---|
+| Send one text | `POST /api/v1/messages`, `Authorization: Bearer <key>`, JSON `{to, fromNumber, body}`; `201 {message: {id, status}}` | The OpenAPI document uses the `/api/v1` prefix, and some guide pages show `/v1`. The path is one constant in `SMS`, and `npm run dial:live` proves it with the first key. |
+| List the account's numbers | `GET /api/v1/numbers`; `200 {numbers: [...]}` | Read-only. The live check uses it to prove the key, and to show the sender number's 10DLC status, which decides if a US phone gets the text. The sweep asks it before it claims a person: a provider that does not answer this call as itself is not sent a text (`listNumbers`, and `provider_answers` in the worker). |
+| Body cap | 1530 characters; 670 when one character is outside the basic SMS alphabet | From the send call's reference. `smsText` keeps every body in the basic alphabet, so the 1530 cap always applies. |
+| `channel` | not sent | "Omit to use the number's own default - a standard number sends SMS, an iMessage number sends iMessage", and an iMessage number falls back to SMS for a phone that cannot take it. So the notice works with either kind of sender number. |
+| SDK | not used | The call is one POST. The SDK adds two runtime dependencies for it. |
+| Retries | none | "Not idempotent - there is no idempotency key, so retrying a failed request can send a duplicate message." A 4xx means nothing was sent. A 5xx or no answer is not known, and is never sent again. |
+| Redirects | never followed (`redirect: "manual"`) | A redirect repeats a POST as a GET, and the page it lands on can answer 200. A 3xx is read as "nothing was sent, and the base address is wrong". |
+| What counts as sent | a 2xx with `{message: {...}}` in the body | A 200 from a different server must not erase a person's number as if the text had gone. `message.id` is kept when it is a string, and is not required. |
+| Error reason | the provider's `code` when it is a lower-case word (`insufficient_credit`, `rate_limited`), else `http_<status>` | The provider's error text can quote the phone number, so it is never copied. |
+
+### Agent search
+
+The provider is Darwin, a search engine for agents. `AGENT_SEARCH` in `@lantern/shared` holds the
+path and the caps, `apps/web/lib/darwin.ts` is the only module that calls it, and the base address
+is `DARWIN_API_URL`. Nothing else names an endpoint. `npm run darwin:live` runs the product's own
+client and gate against it.
+
+Chosen on **2026-10-11** by reading <https://darwin.so/docs> and the OpenAPI document it links,
+and by calls to the public endpoint with no key. The numbers in the table are from those calls.
+
+| What | Value | Why |
+|---|---|---|
+| Search | `POST /api/v2/search`, JSON `{query, numResults}`; `200 {results: [{rank, agent, capability, name, description, readiness, canStartThread}], agents: [{agent, name, verified}]}` | The OpenAPI document and the SDK describe v2. The guide pages describe `/api/v3/search`, which also works with no key. Measured one call at a time: v2 answered in 0.5 to 10.8 s (median 2.3 s) with no failure in 7 calls; v3 answered in 3.3 to 7.7 s (median 4.5 s) and gave `500` on 1 call of 7. Of 17 calls to each version in total, 8 of them at one time, v2 failed 1 time (a `503`) and v3 failed 5 times. A turn gives the search only the time of its own work, so the faster and steadier version is used. v3 ranks better and gives its reasons; the gate does the ranking's work here |
+| Key | none in public mode; `x-api-key: <key>` with `DARWIN_API_KEY` | The search is public at 100 requests each minute, and 5000 with a key. `fetch` does not remove a header of this name when a redirect goes to a different host, so a redirect is never followed (`redirect: "manual"`), and a `3xx` is a failure |
+| `numResults` | 10 | The answer holds more rows than this number (11 to 14 were seen), so at most 50 are read |
+| Time limit | 8 s, and one attempt | The provider asks for a bounded retry after a `503` or a `429`. A turn has no time for one |
+| Link of a listing | `https://index.darwin.so/agent/<agent>?capability=<capability>`, built by the client | The v2 answer has no link for a person: `agents[].websiteUrl` is the address of a machine endpoint. This form is the "Agent page" line of a v3 `connectionPrompt`. It answered `200` for the two kinds of id that were tried (one of them has a `:`, which the client encodes), and `404` for an unknown id |
+| What counts as "can start" | `readiness: "ready"` and `canStartThread: true` | The provider's guide: "Do not turn a descriptive listing into a promise that work can start." |
+| What counts as "needs a payment" | `executionRequirements.payment.state: "REQUIRED"` | The field is in 22 of 86 results that were read, and none of them said `REQUIRED`. No listing was ready, so the rule has no real case yet |
+| Relevance | none is taken from the answer | `outcome` was `MATCH` for each answer, also for a query of nonsense words, and each agent was `verified: true`. So the gate compares names itself |
+| SDK | not used | The call is one POST, and the SDK and the docs disagree on the arguments |
+
 
 ## 6. Capability IR
 
@@ -1050,4 +1435,12 @@ repository bound; `FORGE_LOCAL_CACHE_DIR` for the local strategy's clone; `OPENA
 Codex inside a devbox, optional locally where the saved Codex login is used. Route memory's:
 `MEMORABLE_API_KEY` turns it on with extraction, `MEMORABLE_API_URL` is the extraction API base,
 `LANTERN_ROUTE_MEMORY=local` turns it on with no Memorable key, and `LANTERN_ROUTE_MEMORY_DIR` is
-where the store keeps one JSON file per project (default the OS temp dir).
+where the store keeps one JSON file per project (default the OS temp dir). Text messages:
+`DIAL_API_KEY` and `DIAL_FROM_NUMBER` turn them on together, and they are off when one is blank;
+`DIAL_API_URL` is the API base (default `https://api.getdial.ai`). The worker reads the same three
+names from its own environment (`services/worker/config.py`). Only the runner that sends needs
+them: the worker under `local`, the forge runner under `forge`. Its heartbeat tells the web app
+that the text can be offered, and the web app reads neither variable for the offer. The agent
+search: `DARWIN_API_KEY` turns it on with a key, `LANTERN_DARWIN=public` turns it on with no key,
+and it is off when both are blank; `DARWIN_API_URL` is the API base (default
+`https://api.darwin.so`). Only the web app reads them.

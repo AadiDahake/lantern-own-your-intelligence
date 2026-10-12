@@ -17,6 +17,7 @@ import { CALL_OFF, callReducer, shouldListen } from './call';
 import { newTurn, type Turn } from './model';
 import { rememberCall, wasInCall } from './session';
 import { advanceTowards, FIRST_STAGE, nextStage, STAGE_DWELL_MS, type WorkStage } from './status';
+import { NOTICE_COPY } from './textNotice';
 
 export type LanternApi = {
   open: () => void;
@@ -293,23 +294,26 @@ export function App({ client, shadow, host, position, register }: AppProps) {
   );
 
   const report = useCallback(
-    async (turn: Turn) => {
+    async (turn: Turn, phone?: string) => {
       const conversationId = conversationRef.current;
       if (!conversationId || !turn.messageId || turn.reporting || turn.escalationId) return;
       patch(turn.id, (current) => ({ ...current, reporting: true, reportBlocked: undefined }));
       try {
-        const result = await client.escalate(conversationId, turn.messageId);
+        const result = await client.escalate(conversationId, turn.messageId, phone);
         if (!result.ok) {
           patch(turn.id, (current) => ({ ...current, reporting: false, reportBlocked: result.reason }));
+          setAnnouncement('The report could not be sent.');
           return;
         }
-        const { escalationId, status } = result;
+        const { escalationId, status, notice } = result;
         patch(turn.id, (current) => ({
           ...current,
           reporting: false,
           escalationId,
           escalation: { id: escalationId, status: toEscalationStatus(status) },
+          textNotice: notice,
         }));
+        setAnnouncement(notice ? `Your report was sent. ${NOTICE_COPY[notice]}` : 'Your report was sent.');
         pollEscalation(client, escalationId, (view) => {
           patch(turn.id, (current) => {
             if (current.escalation?.status !== view.status) setElapsedSeconds(0);
@@ -318,6 +322,7 @@ export function App({ client, shadow, host, position, register }: AppProps) {
         });
       } catch {
         patch(turn.id, (current) => ({ ...current, reporting: false, reportBlocked: 'failed' }));
+        setAnnouncement('The report could not be sent.');
       }
     },
     [client, patch],
@@ -555,7 +560,7 @@ export function App({ client, shadow, host, position, register }: AppProps) {
             elapsedSeconds={elapsedSeconds}
             scroll={messageScroll}
             onShowMe={startGuidance}
-            onReport={(turn) => void report(turn)}
+            onReport={(turn, phone) => void report(turn, phone)}
             onRate={(turn, rating) => void rate(turn, rating)}
           />
           {call.active ? (

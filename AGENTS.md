@@ -195,6 +195,75 @@ a group whose `issue_number` is still null, so `services/worker/steps/pipeline.p
 `feature_request_group.issue_claim` with one conditional update before filing; the loser waits for
 the winner's number and comments on that issue. Section 4 of `docs/contracts.md` has the table.
 
+## A text is sent once, and a phone number is never written down
+
+A text message costs a person's attention and cannot be taken back, and the provider's send call
+has no idempotency key. So the rule in `apps/web/lib/sms` binds everything that sends one: claim
+the person first with one conditional update on `gap_subscriber.notified_at`, send only when the
+claim returned the row, and never repeat a send, not after a timeout and not after a 5xx. A send
+with no confirmed answer keeps its claim. A text goes out under a company's name, so it quotes
+words from outside only through `draftNoticeText`, which removes everything a phone turns into a
+link or a number to call.
+
+A phone number exists in two places: sealed in `gap_subscriber.phone_sealed` (`lib/seal.ts`) while a
+text is owed, and in the request body to the provider. It never goes into a trace row, an error, a
+log line or a reason code, and the provider's own error text is never copied, because it can quote
+the number. `apps/web/lib/dial.ts` is the only module in the web app that calls the provider.
+"The text notice" in section 4 of `docs/contracts.md` has the table and the outcomes.
+
+A number is taken only with the person's tick on the gap card, and one module writes it:
+`apps/web/lib/sms/subscribe.ts`, called by `POST /api/escalate` after the report is recorded. The
+offer of the text is a promise, so it follows the runner that sends: the worker under `local` and
+the forge runner under `forge` each say `sms: true` in a heartbeat, and `lib/sms/offer.ts` reads
+only that. Never offer the text from the web app's own variables: the sender is a different
+process. A row is written first and the gap's state is read second, so a row that no run will see
+is taken back, and a request takes back only the row of its own answer. The embed key is public
+and no number is proven, so three limits bound what a caller can make the company send (one
+number for one answer, 50 people for one gap, 100 new numbers a day for one project); keep them
+in front of any new path that stores a number.
+
+The worker sends the same text under the `local` engine, so the rule has two copies:
+`apps/web/lib/sms` with `packages/shared/src/sms.ts`, and `services/worker/steps/sms_notice.py`
+with `steps/sms_text.py`. Change them together. `packages/shared/test/fixtures/sms-text.json` is
+run by both test suites and holds the two texts equal. `steps/dial.py` is the only module in the
+worker that calls the provider, and no call in it goes through `steps/retry.py`, because that
+module repeats a call.
+
+The pass at the draft runs one time, so each runner also sweeps: `lib/sms/sweep.ts` in the forge
+runner and `steps/sms_sweep.py` in the worker give a later pass to each person who is still owed
+while the draft is open and no person has decided it. The sweep adds no second sender. It calls
+the same pass, so the claim is still the only thing between a person and a second text. What it
+adds is care about when to try: it asks the provider one read-only question before it claims
+anyone, it stops for a growing wait after a send that the provider did not take, a gap whose
+number is refused each time waits by itself, and the gap with the least trouble goes first. The
+text says that the team reviews the change next, so `owedGaps` reads a gap only while the gap's
+own run (`feature_request_group.escalation_id`) is a full run with no approval. Do not read the
+gap's state alone, because it stays `awaiting_approval` after the decision, and do not read any
+run of the gap, because a failed run that only carried a count stays at `awaiting_approval` too. `packages/shared/test/fixtures/sms-sweep.json` is run by both test suites
+and holds the two copies of the rule equal; add a scenario there when you change a wait, the
+order of the tries, or a row. The query, the question and the timers have their own tests in
+each suite.
+
+## A service outside the product is offered only when it can start
+
+When every check comes back empty, a turn can look in a public index for a service that already
+does the job (`apps/web/lib/alternatives`, "Outside services" in section 4 of
+`docs/contracts.md`). It is off unless the deployment turns it on. Three rules hold for anything
+added to it:
+
+- The search never costs the visitor time. It runs beside the verdict and the draft, the turn
+  reads it one time when the answer is ready, and a search that has not answered is stopped.
+  Never await it, and never start it for a question that a check answered.
+- The capability name leaves the product whole or not at all, through `queryFor`: never the
+  message, never the page, never an id, and never a name with a word taken out.
+- An offer stands under a company's name and points at a service that nobody there has tried, so
+  `gate` is strict on purpose. The listing must be named for the capability word for word
+  (`sameName`; do not use `coversCapability` here, it lets one concept differ and joins
+  synonyms), the index must say that it can start now with no payment, and the service must be
+  verified. An offer is two names and a link: no sentence of a listing is shown, and the link is
+  built from two ids and never taken from the answer. `apps/web/lib/darwin.ts` is the only module
+  that calls the index.
+
 ## A blip on the wire is not a verdict on the request
 
 Every Supabase and GitHub call in `services/worker` goes through `steps/retry.py`: a dropped
@@ -305,6 +374,8 @@ npm run e2e:guide    # the guided walk on NovaAir, against the widget's mock API
 npm run discover:runner -- --once     # drain the discovery queue; --model codex compiles on the saved Codex login
 LANTERN_CONSOLE_TOKEN=... npm run tail   # the evidence loop as a board in the terminal
 npm run ask:live -- "<question>" [home|trip|seats]   # the live site, answered by this working tree
+npm run dial:live    # the text message provider: the key and the sender number, read-only; --send <number> sends one text
+LANTERN_DARWIN=public npm run darwin:live -- "<capability>"   # the agent search with no key: what the index returns and what the gate offers
 ```
 
 Screenshots come from `scripts/screenshots.mjs` (Playwright, one private browser per run), never

@@ -30,6 +30,22 @@ describe("token encryption", () => {
     expect(decryptToken(flipped)).toBeNull();
   });
 
+  it("still reads a value that was stored before, which is also what the worker reads", async () => {
+    // The fixture of services/worker/tests/test_github_token.py: throwaway strings, never a
+    // real credential. It pins the stored format, so a change to lib/seal.ts cannot orphan the
+    // tokens that are already in the database.
+    const { decryptToken } = await load();
+    const before = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "sbp_test_service_role_key_for_fixtures_only";
+    try {
+      expect(
+        decryptToken("hZH2Jqqzs08HHllO.u7Lsq0-00kxhVVcT4l8EgSSfcJD38yPb2yfItNMyZqU.4jDNBEbsOczjI4RiB-u4_g"),
+      ).toBe("ghu_fixture_token_value_not_real");
+    } finally {
+      process.env.SUPABASE_SERVICE_ROLE_KEY = before;
+    }
+  });
+
   it("treats an unreadable stored value as no connection", async () => {
     const { decryptToken } = await load();
     expect(decryptToken("not-a-ciphertext")).toBeNull();

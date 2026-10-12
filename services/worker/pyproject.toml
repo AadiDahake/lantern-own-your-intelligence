@@ -8,7 +8,7 @@ dependencies = [
     "requests>=2.32",
     "mcp>=1.9",
     "pydantic>=2.7",
-    # Reads the GitHub token the dashboard encrypted; see steps/github_token.py.
+    # Opens what the dashboard stores encrypted (the GitHub token, a phone number); see steps/seal.py.
     "cryptography>=42",
 ]
 

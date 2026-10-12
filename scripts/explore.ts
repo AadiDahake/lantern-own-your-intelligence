@@ -35,6 +35,7 @@ async function main(): Promise<void> {
     process.exit(2);
   }
   const jobs = await import("../apps/web/lib/graph/jobs");
+  const { runClaimedExploration } = await import("../apps/web/lib/graph/run-exploration");
 
   if (args.mode === "one") {
     const project = await projectBySlug(args.project);
@@ -42,7 +43,7 @@ async function main(): Promise<void> {
     if (!siteUrl) throw new Error(`project ${args.project} has no site address; pass --url`);
     const job = await jobs.startExploration(project.id, siteUrl);
     say(`exploring ${siteUrl} for ${args.project}`);
-    const result = await jobs.runClaimedExploration(job, (line) => say(`  ${line}`));
+    const result = await runClaimedExploration(job, (line) => say(`  ${line}`));
     if (result.status === "failed") throw new Error(result.error ?? "the exploration failed");
     const summary = result.summary;
     if (summary) {
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
       continue;
     }
     say(`[${job.id.slice(0, 8)}] exploring ${job.siteUrl}`);
-    const result = await jobs.runClaimedExploration(job, (line) => say(`[${job.id.slice(0, 8)}] ${line}`));
+    const result = await runClaimedExploration(job, (line) => say(`[${job.id.slice(0, 8)}] ${line}`));
     say(`[${job.id.slice(0, 8)}] ${result.status}${result.error ? `: ${result.error}` : ""}`);
   }
 }

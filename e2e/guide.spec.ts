@@ -9,11 +9,23 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
  * this run and not from a guess.
  */
 
+/**
+ * Whole milliseconds since `start`, a value of `performance.now()`. That clock only goes forward.
+ * `Date.now()` follows the wall clock, and a host that corrects its clock during a test gave a
+ * time to first spotlight of -564 ms.
+ */
+const elapsedMs = (start: number): number => Math.round(performance.now() - start);
+
 const QUESTION = "Where do I change my seat?";
+// The booking NovaAir's demo data holds. The names and defaults are the ones scripts/ask-live.mjs
+// reads, so a host site with another booking is one pair of variables for both.
+const BOOKING = process.env.NOVAAIR_BOOKING ?? "NVA7K2";
+const LAST_NAME = process.env.NOVAAIR_LAST_NAME ?? "Musk";
+const TRIP = `/trips/${BOOKING}`;
 const ROUTE = [
   { name: "My Booking", role: "link" as const, page: "/" },
   { name: "Find my booking", role: "button" as const, page: "/my-booking" },
-  { name: "Change seats", role: "link" as const, page: "/trips/NVA7K2" },
+  { name: "Change seats", role: "link" as const, page: TRIP },
 ];
 
 type Rect = { x: number; y: number; width: number; height: number };
@@ -74,24 +86,32 @@ test.beforeAll(async ({ request }) => {
   // In mock mode NovaAir runs in development mode and compiles each route on first use, which can
   // take longer than a step's wait. One request to the booking lookup warms it before the walk.
   if (!process.env.NOVAAIR_BASE_URL) {
-    await request.post("/api/reservations/lookup", { data: { code: "NVA7K2", lastName: "Dahake" } }).catch(() => undefined);
-    await request.get("/trips/NVA7K2").catch(() => undefined);
-    await request.get("/trips/NVA7K2/seats").catch(() => undefined);
+    await request.post("/api/reservations/lookup", { data: { code: BOOKING, lastName: LAST_NAME } }).catch(() => undefined);
+    await request.get(TRIP).catch(() => undefined);
+    await request.get(`${TRIP}/seats`).catch(() => undefined);
   }
 });
 
 test("the widget walks a customer from Home to the seat map in three announced steps", async ({ page }) => {
+  // A booking the host site cannot find stops the walk at step 2, and the only symptom there is a
+  // URL that never changes. Asked here, the same fault names its cause.
+  const lookup = await page.request.post("/api/reservations/lookup", { data: { code: BOOKING, lastName: LAST_NAME } });
+  expect(
+    lookup.ok(),
+    `the host site has no booking ${BOOKING} for the last name ${LAST_NAME} (HTTP ${lookup.status()}); set NOVAAIR_BOOKING and NOVAAIR_LAST_NAME`,
+  ).toBe(true);
+
   const stepsSeen: string[] = [];
   await page.goto("/");
   await page.getByRole("button", { name: "Open support" }).click();
   const composer = page.getByRole("textbox").last();
   await composer.fill(QUESTION);
 
-  const asked = Date.now();
+  const asked = performance.now();
   await composer.press("Enter");
 
   const firstRing = await waitForSpotlight(page);
-  const timeToFirstSpotlight = Date.now() - asked;
+  const timeToFirstSpotlight = elapsedMs(asked);
 
   // The count is announced once, on the first step, and it is the whole route.
   await expect.poll(() => counter(page)).toBe(`Step 1 of ${ROUTE.length}`);
@@ -106,8 +126,8 @@ test("the widget walks a customer from Home to the seat map in three announced s
     expect(await counter(page)).toBe(`Step ${index + 1} of ${ROUTE.length}`);
 
     if (step.name === "Find my booking") {
-      await page.getByLabel("Confirmation code").fill("NVA7K2");
-      await page.getByLabel("Last name").fill("Dahake");
+      await page.getByLabel("Confirmation code").fill(BOOKING);
+      await page.getByLabel("Last name").fill(LAST_NAME);
     }
     await target.click();
 
@@ -142,14 +162,14 @@ test("the widget walks a customer from Home to the seat map in three announced s
 test("a question asked before answers from the product map without a model", async ({ page }) => {
   // The first test taught the project this intent. The same question from the trip page should
   // spotlight at once; the budget below is the one the design commits to for a known route.
-  await page.goto("/trips/NVA7K2");
+  await page.goto(TRIP);
   await page.getByRole("button", { name: "Open support" }).click();
   const composer = page.getByRole("textbox").last();
   await composer.fill(QUESTION);
-  const asked = Date.now();
+  const asked = performance.now();
   await composer.press("Enter");
   const ring = await waitForSpotlight(page);
-  const elapsed = Date.now() - asked;
+  const elapsed = elapsedMs(asked);
   const target = await spotlitControl(page, ROUTE[2]!, ring);
   await expect(target).toBeVisible();
   expect(await counter(page)).toBe("Step 1 of 1");
@@ -174,4 +194,55 @@ test("a greeting is answered without checks, and nothing is offered to report", 
     () => document.querySelector("lantern-widget")?.shadowRoot?.querySelector(".pl-card p")?.textContent ?? "",
   );
   expect(answer).not.toMatch(/I am sorry|report this to the developers/i);
+});
+
+test("a gap report can ask for one text, and the number leaves only with the tick", async ({ page }) => {
+  // Against a running stack the report button files a real issue, so this runs on the mock only.
+  test.skip(Boolean(process.env.NOVAAIR_BASE_URL), "the report is an outward action on a running stack");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open support" }).click();
+  const composer = page.getByRole("textbox", { name: "Ask a question" });
+  await composer.fill("Can you seat my family together?");
+  await composer.press("Enter");
+
+  const report = page.getByRole("button", { name: "Report to developers" });
+  await expect(report).toBeVisible({ timeout: 30_000 });
+  const tick = page.getByRole("checkbox", { name: "Text me when a change for this is drafted" });
+  const number = page.getByRole("textbox", { name: "Mobile number with country code" });
+  // The question is optional: the box is not ticked, and no field asks for a number yet.
+  await expect(tick).not.toBeChecked();
+  await expect(number).toHaveCount(0);
+
+  await tick.check();
+  await expect(number).toBeVisible();
+  await expect(page.getByText("You get one text, and only if the team drafts a change.", { exact: false })).toBeVisible();
+
+  // A number with no country code stops the report, and the words are next to the field.
+  let reports = 0;
+  page.on("request", (request) => {
+    if (request.url().endsWith("/api/escalate") && request.method() === "POST") reports += 1;
+  });
+  await number.fill("415 555 0123");
+  await report.click();
+  // The host page has an alert region of its own (the framework's route announcer).
+  await expect(page.getByRole("alert").filter({ hasText: "Enter your number with the country code" })).toBeVisible();
+  await expect(number).toBeFocused();
+  expect(reports).toBe(0);
+
+  // The whole flow works from the keyboard: Enter in the field sends the report.
+  await number.fill("+1 (415) 555-0123");
+  const [sent] = await Promise.all([
+    page.waitForRequest((request) => request.url().endsWith("/api/escalate") && request.method() === "POST"),
+    number.press("Enter"),
+  ]);
+  expect(sent.postDataJSON().notify).toEqual({ phone: "+14155550123", consent: true });
+
+  await expect(page.getByText("You will get one text when a change for this is drafted.", { exact: true })).toBeVisible();
+  // The card moved on to the progress list, and the number is not in the page any more.
+  await expect(report).toHaveCount(0);
+  await expect(number).toHaveCount(0);
+  const panel = await page.evaluate(() => document.querySelector("lantern-widget")?.shadowRoot?.innerHTML ?? "");
+  expect(panel).not.toContain("4155550123");
+  expect(panel).not.toContain("555-0123");
 });

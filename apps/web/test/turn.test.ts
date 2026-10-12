@@ -45,7 +45,16 @@ vi.mock("@/lib/openai", () => ({
   embed: async (inputs: string[]) => inputs.map(() => new Array(1536).fill(0)),
 }));
 
-vi.mock("@/lib/trace", () => ({ emitTrace: async () => undefined }));
+/** The trace rows the turn wrote, by title. */
+const traced: { title: string; detail: unknown }[] = [];
+/** Where each of those rows was filed: the conversation and the gap, by title. */
+const filed: { title: string; conversationId: unknown; groupId: unknown }[] = [];
+vi.mock("@/lib/trace", () => ({
+  emitTrace: async (input: { title: string; detail: unknown; conversationId?: unknown; groupId?: unknown }) => {
+    traced.push({ title: input.title, detail: input.detail });
+    filed.push({ title: input.title, conversationId: input.conversationId, groupId: input.groupId });
+  },
+}));
 
 class FakeQuery {
   constructor(private readonly table: string) {}
@@ -120,8 +129,55 @@ vi.mock("@/lib/agent/memory", () => ({
 
 vi.mock("@/lib/agent/summary", () => ({ closeConversation: async () => "solved" }));
 
+/** The state of the gap that the note joined. */
+let noteStatus: string | null = "observed";
 vi.mock("@/lib/agent/requests", () => ({
-  noteRequest: async () => ({ noted: true, groupId: "group-1" }),
+  noteRequest: async () => ({ noted: true, groupId: "group-1", status: noteStatus }),
+}));
+
+/** What the process that sends the one text says. Off is the state of a deployment with no provider. */
+let textOffer: { on: true } | { on: false; reason: string } = { on: false, reason: "DIAL_API_KEY is not set" };
+const offerAsks: string[] = [];
+vi.mock("@/lib/sms/offer", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/sms/offer")>()),
+  textOffer: async (projectId: string) => {
+    offerAsks.push(projectId);
+    return textOffer;
+  },
+}));
+
+type OutsideOutcome = import("@/lib/alternatives/search").OutsideOutcome;
+const OUTSIDE_OFF: OutsideOutcome = { state: "off", reason: "DARWIN_API_KEY is not set and LANTERN_DARWIN is not 'public'" };
+/** What the agent search has for the turn when the answer is ready. Off is a deployment that did not turn it on. */
+let outsideOutcome: OutsideOutcome = OUTSIDE_OFF;
+/** Each search the turn started: the capability, and the model calls that were made before it. */
+const outsideStarts: { feature: string; modelCalls: string[] }[] = [];
+/** Each time the turn read the search: true when it wanted an offer. */
+const outsideTakes: boolean[] = [];
+/** Each search that the turn ended with no read, because the turn itself ended. */
+const outsideAbandons: string[] = [];
+vi.mock("@/lib/alternatives/search", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/alternatives/search")>()),
+  lookElsewhere: (feature: string) => {
+    outsideStarts.push({ feature, modelCalls: calls.map((call) => call.name) });
+    // The real search says nothing when nothing was sent, and it ends one time only.
+    const sent = () => outsideOutcome.state !== "off" && outsideOutcome.state !== "skipped";
+    let ended = false;
+    return {
+      take: (wanted: boolean) => {
+        ended = true;
+        outsideTakes.push(wanted);
+        if (!wanted && !sent()) return null;
+        return wanted ? outsideOutcome : { state: "dropped" as const, query: feature, waitedMs: 1200 };
+      },
+      abandon: () => {
+        if (ended || !sent()) return null;
+        ended = true;
+        outsideAbandons.push(feature);
+        return { state: "abandoned" as const, query: feature, waitedMs: 300 };
+      },
+    };
+  },
 }));
 
 /** The opportunity pipeline the absence path enqueues, kept off this turn and out of the network. */
@@ -214,6 +270,15 @@ beforeEach(() => {
   remembered = null;
   graph = NOVAAIR_GRAPH;
   discoveries.length = 0;
+  traced.length = 0;
+  noteStatus = "observed";
+  textOffer = { on: false, reason: "DIAL_API_KEY is not set" };
+  offerAsks.length = 0;
+  outsideOutcome = OUTSIDE_OFF;
+  outsideStarts.length = 0;
+  outsideTakes.length = 0;
+  outsideAbandons.length = 0;
+  filed.length = 0;
 });
 
 describe('"Hello, can you hear me?"', () => {
@@ -457,6 +522,254 @@ describe("a capability the product does not have", () => {
     const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP, null));
     expect(answer?.text).not.toContain("report");
     expect(answer?.escalation).toMatchObject({ offered: false });
+  });
+});
+
+describe("the one text that the report can offer", () => {
+  const textRows = () => traced.filter((row) => row.title.startsWith("Text notice"));
+
+  beforeEach(() => {
+    chunks = [CHILDREN_PASSAGE];
+    answers = {
+      understanding: { intent: "product", feature: "finding seats together" },
+      passage_read: { covers: false, reason: "it says to move one passenger at a time" },
+      verdict: { exists: false, confidence: 0.9, reasoning: "no control and no passage says it can be done" },
+      feature_request: {
+        title: "Find seats together for a party",
+        description: "Let a family take three seats side by side in one move.",
+        area: "seats",
+        quote: "Can you find us three seats together?",
+        rationale: "Today they rebook one passenger at a time.",
+      },
+    };
+  });
+
+  it("is not in the offer when text messages are off, and the trace says that the part is off", async () => {
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer?.escalation).toMatchObject({ offered: true });
+    expect(answer?.escalation).not.toHaveProperty("textNotice");
+    expect(textRows()).toEqual([
+      { title: "Text notice: not offered", detail: { notice: "draft_sms", offer: "off", reason: "DIAL_API_KEY is not set" } },
+    ]);
+  });
+
+  it("is in the offer when the sender says that it can text", async () => {
+    textOffer = { on: true };
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer?.escalation).toMatchObject({ offered: true, textNotice: true });
+    expect(offerAsks).toEqual(["project-1"]);
+    expect(textRows().map((row) => row.title)).toEqual(["Text notice: offered with the report"]);
+  });
+
+  it.each(["pr_open", "awaiting_approval", "shipped", "rejected"])(
+    "is not offered for a gap that is already %s, because no text would come",
+    async (status) => {
+      textOffer = { on: true };
+      noteStatus = status;
+      const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+      expect(answer?.escalation).toMatchObject({ offered: true });
+      expect(answer?.escalation).not.toHaveProperty("textNotice");
+      expect(textRows()).toEqual([
+        { title: "Text notice: not offered", detail: { notice: "draft_sms", offer: "off", reason: `the gap is ${status}` } },
+      ]);
+    },
+  );
+
+  it("is still offered when the note could not be made, because the route checks the gap again", async () => {
+    textOffer = { on: true };
+    noteStatus = null;
+    expect(answerOf(await stream(SEATS_TOGETHER, SEAT_MAP))?.escalation).toMatchObject({ textNotice: true });
+  });
+
+  it("is not asked about when there is no repository to file against", async () => {
+    textOffer = { on: true };
+    projectRow = { id: "project-1", repo_full_name: null };
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP, null));
+    expect(answer?.escalation).toEqual({ offered: false, reason: "no_repository" });
+    expect(offerAsks).toEqual([]);
+    expect(textRows()).toEqual([]);
+  });
+
+  it("is not asked about on a turn that offers no report", async () => {
+    textOffer = { on: true };
+    answers = { understanding: { intent: "chat", feature: "" }, chat_answer: { answer: "Yes, I can hear you." } };
+    const answer = answerOf(await stream("Hello, can you hear me?"));
+    expect(answer?.escalation).toEqual({ offered: false });
+    expect(offerAsks).toEqual([]);
+    expect(textRows()).toEqual([]);
+  });
+});
+
+describe("a service outside the product that already does the job", () => {
+  const outsideRows = () => traced.filter((row) => row.title.startsWith("Outside services"));
+  const SEAT_FINDER = {
+    name: "Find seats together",
+    provider: "SeatFinder",
+    url: "https://index.darwin.so/agent/agent1?capability=cap1",
+  };
+  const found = (offered: (typeof SEAT_FINDER)[]): OutsideOutcome => ({
+    state: "done",
+    query: "finding seats together",
+    latencyMs: 2300,
+    offered,
+    counts: { found: 7, named: offered.length, startable: offered.length },
+    near: [],
+  });
+
+  beforeEach(() => {
+    chunks = [CHILDREN_PASSAGE];
+    answers = {
+      understanding: { intent: "product", feature: "finding seats together" },
+      passage_read: { covers: false, reason: "it says to move one passenger at a time" },
+      verdict: { exists: false, confidence: 0.9, reasoning: "no control and no passage says it can be done" },
+      feature_request: {
+        title: "Find seats together for a party",
+        description: "Let a family take three seats side by side in one move.",
+        area: "seats",
+        quote: "Can you find us three seats together?",
+        rationale: "Today they rebook one passenger at a time.",
+      },
+    };
+  });
+
+  it("is searched for one time, with the capability name, when the three checks are empty and before the verdict is asked", async () => {
+    await stream(SEATS_TOGETHER, SEAT_MAP);
+    // The search runs beside the verdict and the draft, so it is started before both.
+    expect(outsideStarts).toEqual([{ feature: "finding seats together", modelCalls: ["understanding", "passage_read"] }]);
+    expect(outsideTakes).toEqual([true]);
+  });
+
+  it("is in the answer when the search found one that passed the gate, and the words of the answer stay the same", async () => {
+    const plain = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    outsideOutcome = found([SEAT_FINDER]);
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+
+    expect(answer?.alternatives).toEqual([SEAT_FINDER]);
+    expect(answer?.text).toBe(plain?.text);
+    expect(answer?.escalation).toMatchObject({ offered: true });
+    expect(outsideRows().at(-1)).toMatchObject({
+      title: "Outside services: 1 offered of 7 found",
+      detail: { tool: "agent_search", args_summary: "finding seats together", state: "done" },
+    });
+    // The row is filed with the conversation and with the gap, so the team finds it from both.
+    expect(filed.filter((row) => row.title.startsWith("Outside services")).at(-1)).toMatchObject({
+      conversationId: "conversation-1",
+      groupId: "group-1",
+    });
+    // The turn read the search, so nothing was left to end.
+    expect(outsideAbandons).toEqual([]);
+  });
+
+  it("is ended and recorded when the turn fails after the search started", async () => {
+    outsideOutcome = found([SEAT_FINDER]);
+    // No verdict is scripted, so the call for it throws, as a provider that is down does.
+    delete answers.verdict;
+    await expect(stream(SEATS_TOGETHER, SEAT_MAP)).rejects.toThrow('unexpected "verdict" call');
+
+    expect(outsideStarts).toHaveLength(1);
+    expect(outsideTakes).toEqual([]);
+    expect(outsideAbandons).toEqual(["finding seats together"]);
+    expect(outsideRows().map((row) => row.title)).toEqual(["Outside services: the turn ended before the result was read"]);
+    expect(filed.at(-1)).toMatchObject({ conversationId: "conversation-1" });
+  });
+
+  it("is ended and recorded when the reader leaves before the answer", async () => {
+    outsideOutcome = found([SEAT_FINDER]);
+    for await (const event of runTurn({
+      projectId: "project-1",
+      repoFullName: "novaair/novaair",
+      defaultBranch: "main",
+      siteUrl: "http://localhost:4150",
+      question: SEATS_TOGETHER,
+      page: SEAT_MAP,
+    })) {
+      if (event.type === "verdict") break;
+    }
+    expect(outsideTakes).toEqual([]);
+    expect(outsideAbandons).toEqual(["finding seats together"]);
+    expect(outsideRows().map((row) => row.title)).toEqual(["Outside services: the turn ended before the result was read"]);
+  });
+
+  it("writes no row for a turn that fails when the search is off", async () => {
+    delete answers.verdict;
+    await expect(stream(SEATS_TOGETHER, SEAT_MAP)).rejects.toThrow();
+    expect(outsideAbandons).toEqual([]);
+    expect(outsideRows()).toEqual([]);
+  });
+
+  it("is not in the answer when the search is off, and the trace says that the part is off", async () => {
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer).not.toHaveProperty("alternatives");
+    expect(outsideRows()).toEqual([
+      { title: "Outside services: off", detail: { search: "agents", state: "off", reason: OUTSIDE_OFF.reason } },
+    ]);
+  });
+
+  it("is not in the answer when the search found none that passed the gate", async () => {
+    outsideOutcome = found([]);
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer).not.toHaveProperty("alternatives");
+    expect(outsideRows().map((row) => row.title)).toEqual(["Outside services: none offered of 7 found"]);
+  });
+
+  it.each([
+    ["had not answered when the answer was ready", { state: "late", query: "finding seats together", waitedMs: 4250 }, "Outside services: no answer in time"],
+    ["failed", { state: "failed", query: "finding seats together", reason: "http_503", latencyMs: 7020 }, "Outside services: the search failed"],
+  ] as [string, OutsideOutcome, string][])("is not in the answer when the search %s, and the answer is the same", async (_label, outcome, title) => {
+    const plain = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    traced.length = 0;
+    outsideOutcome = outcome;
+    const answer = answerOf(await stream(SEATS_TOGETHER, SEAT_MAP));
+    expect(answer).toEqual(plain);
+    expect(outsideRows().map((row) => row.title)).toEqual([title]);
+  });
+
+  it("is not offered when the verdict does not confirm the absence, and the trace says that the result was not used", async () => {
+    outsideOutcome = found([SEAT_FINDER]);
+    answers.verdict = { exists: true, confidence: 0.4, reasoning: "a passage hints at it" };
+    const events = await stream(SEATS_TOGETHER, SEAT_MAP);
+
+    expect(events.find((event) => event.type === "verdict")?.verdict.outcome).toBe("hedge");
+    expect(outsideTakes).toEqual([false]);
+    expect(answerOf(events)).not.toHaveProperty("alternatives");
+    expect(outsideRows().map((row) => row.title)).toEqual(["Outside services: not needed, the absence was not confirmed"]);
+  });
+
+  it("writes no row for a verdict that is not absent when the search is off", async () => {
+    answers.verdict = { exists: true, confidence: 0.4, reasoning: "a passage hints at it" };
+    await stream(SEATS_TOGETHER, SEAT_MAP);
+    expect(outsideTakes).toEqual([false]);
+    expect(outsideRows()).toEqual([]);
+  });
+
+  it("is never searched for on a message that is not about the product", async () => {
+    outsideOutcome = found([SEAT_FINDER]);
+    answers = { understanding: { intent: "chat", feature: "" }, chat_answer: { answer: "Yes, I can hear you." } };
+    const answer = answerOf(await stream("Hello, can you hear me?"));
+    expect(outsideStarts).toEqual([]);
+    expect(answer).not.toHaveProperty("alternatives");
+    expect(outsideRows()).toEqual([]);
+  });
+
+  it("is never searched for when the product has the control", async () => {
+    outsideOutcome = found([SEAT_FINDER]);
+    graph = NOVAAIR_GRAPH_AFTER;
+    answers = {
+      understanding: { intent: "product", feature: "finding seats together" },
+      passage_read: { covers: false, reason: "it says to move one passenger at a time" },
+      resolve_target: {
+        target: "c1",
+        answer: "NovaAir supports this directly now. I will show you.",
+        captions: ["Select Find seats together"],
+      },
+    };
+    const events = await stream("Okay, how do I get seats together now?", SEAT_MAP_AFTER);
+    expect(events.find((event) => event.type === "verdict")?.verdict.outcome).toBe("answer");
+    expect(answerOf(events)?.steps).not.toBeNull();
+    expect(outsideStarts).toEqual([]);
+    expect(outsideTakes).toEqual([]);
+    expect(answerOf(events)).not.toHaveProperty("alternatives");
+    expect(outsideRows()).toEqual([]);
   });
 });
 
